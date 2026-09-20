@@ -1116,6 +1116,16 @@ class SavingsRepository {
     );
   }
 
+  /// Tutorial guiado de Inicio (bolsa de caprichos + como apuntar un
+  /// gasto). `true` tanto al terminarlo como al saltarlo; "Ajustes >
+  /// Repetir tutorial" lo vuelve a poner en `false`.
+  Future<void> setHasSeenTutorial(bool value) async {
+    await getAppSettings();
+    await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
+      AppSettingsCompanion(hasSeenTutorial: Value(value)),
+    );
+  }
+
   /// Día 1-28 en el que "empieza el mes" (Ajustes > Personalización >
   /// "Mes de nómina a nómina"). `null` vuelve al calendario normal (día
   /// 1). Este cambio se aplica retroactivamente a todo el historial de

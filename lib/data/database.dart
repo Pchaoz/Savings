@@ -43,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -119,6 +119,15 @@ class AppDatabase extends _$AppDatabase {
           // exactamente "sigue siendo el día 1 de siempre".
           if (from < 8) {
             await m.addColumn(appSettings, appSettings.monthStartDay);
+          }
+          // v9: tutorial guiado (bolsa de caprichos + como apuntar un
+          // gasto) en Inicio para quien abre la app por primera vez.
+          // Nullable no hace falta -- por defecto false, asi que quien ya
+          // tenia la app instalada (y ya sabe usarla) no lo pierde de
+          // vista: simplemente se le ofrecera una vez en su proxima
+          // apertura, y puede saltarlo con un toque.
+          if (from < 9) {
+            await m.addColumn(appSettings, appSettings.hasSeenTutorial);
           }
         },
       );

@@ -704,4 +704,18 @@ void main() {
       });
     });
   });
+
+  group('tutorial guiado (hasSeenTutorial)', () {
+    test('por defecto no se ha visto el tutorial', () async {
+      expect((await repo.getAppSettings()).hasSeenTutorial, isFalse);
+    });
+
+    test('se puede marcar como visto y se puede volver a resetear', () async {
+      await repo.setHasSeenTutorial(true);
+      expect((await repo.getAppSettings()).hasSeenTutorial, isTrue);
+
+      await repo.setHasSeenTutorial(false);
+      expect((await repo.getAppSettings()).hasSeenTutorial, isFalse);
+    });
+  });
 }

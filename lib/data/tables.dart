@@ -227,6 +227,14 @@ class AppSettings extends Table {
   /// no pelearse con febrero.
   IntColumn get monthStartDay => integer().nullable()();
 
+  /// Si ya se le enseño el tutorial guiado (bolsa de caprichos + como
+  /// apuntar un gasto) al menos una vez -- por defecto false, asi que a
+  /// una instalacion nueva se le ofrece automaticamente en Inicio. Se
+  /// pone a true tanto al terminar el tutorial entero como al pulsar
+  /// "Saltar tutorial" (las dos cuentan como "ya visto", para no volver a
+  /// insistir). "Ajustes > Repetir tutorial" lo pone de nuevo a false.
+  BoolColumn get hasSeenTutorial => boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column> get primaryKey => {id};
 }

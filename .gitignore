@@ -33,6 +33,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Ficheros que la app de escritorio de Claude deja en la carpeta
+# conectada al enviar archivos a la conversacion (no son parte del
+# proyecto).
+/Claude outputs/
+
 # Symbolication related
 app.*.symbols
 

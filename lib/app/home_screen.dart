@@ -21,6 +21,7 @@ import '../core/treat_widget_bridge.dart';
 import '../data/database.dart';
 import '../domain/models/models.dart';
 import 'add_expense_screen.dart';
+import 'coach_mark_overlay.dart';
 import 'movements_screen.dart';
 import 'pockets_screen.dart';
 import 'providers.dart';
@@ -37,6 +38,10 @@ String _formatYearMonth(String yearMonth) {
   final month = int.parse(parts[1]);
   return '${_monthNames[month - 1]} ${parts[0]}';
 }
+
+final _treatBagCardKey = GlobalKey();
+final _addExpenseButtonKey = GlobalKey();
+bool _tutorialTriggeredThisSession = false;
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -66,6 +71,7 @@ class HomeScreen extends ConsumerWidget {
     final showPocketsInTotal = appSettings?.showPocketsInTotal ?? true;
     final totalPockets = ref.watch(totalPocketsCentsProvider).value ?? 0;
     final pendingSweep = ref.watch(pendingTreatSweepProvider).value;
+    final forceShowTutorial = ref.watch(forceShowTutorialProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -112,6 +118,42 @@ class HomeScreen extends ConsumerWidget {
             final totalAhorro = (isCurrentMonth && !showPocketsInTotal)
                 ? r.closingBalanceCents - totalPockets
                 : r.closingBalanceCents;
+            final alreadySeenTutorial = appSettings?.hasSeenTutorial ?? true;
+            if (isCurrentMonth &&
+                (forceShowTutorial ||
+                    (!alreadySeenTutorial && !_tutorialTriggeredThisSession))) {
+              _tutorialTriggeredThisSession = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!context.mounted) return;
+                if (forceShowTutorial) {
+                  ref.read(forceShowTutorialProvider.notifier).consume();
+                }
+                showCoachMarks(
+                  context: context,
+                  steps: [
+                    CoachMarkStep(
+                      targetKey: _treatBagCardKey,
+                      title: 'Tu bolsa de caprichos',
+                      message: 'Cada mes, de lo que te sobra tras pagar gastos '
+                          'fijos y variables, se aparta aquí automáticamente '
+                          'un margen — el dinero que puedes gastar en cosas '
+                          'no esenciales sin tocar tu ahorro real.',
+                    ),
+                    CoachMarkStep(
+                      targetKey: _addExpenseButtonKey,
+                      title: 'Apunta un gasto o ingreso',
+                      message: 'Toca aquí para apuntar algo nuevo. Se guarda '
+                          'con la fecha de hoy y se descuenta al momento de '
+                          'la categoría que elijas.',
+                    ),
+                  ],
+                  onDone: () async {
+                    await ref.read(repositoryProvider).setHasSeenTutorial(true);
+                    ref.invalidate(appSettingsProvider);
+                  },
+                );
+              });
+            }
             return SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               child: Column(
@@ -157,7 +199,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  _TreatBagCard(result: r),
+                  _TreatBagCard(key: _treatBagCardKey, result: r),
                   const SizedBox(height: 16),
                   Text('Patrimonio total: ${formatCents(r.netWorthCents)}', style: T.meta),
                   const SizedBox(height: 20),
@@ -203,6 +245,7 @@ class HomeScreen extends ConsumerWidget {
       ),
       floatingActionButton: isCurrentMonth
           ? FloatingActionButton(
+              key: _addExpenseButtonKey,
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AddExpenseScreen()),
               ),
@@ -218,7 +261,7 @@ class HomeScreen extends ConsumerWidget {
 /// ahora no se usaba. Muestra el importe grande de siempre más, debajo,
 /// una barra de cuánto llevas gastado del presupuesto disponible.
 class _TreatBagCard extends StatelessWidget {
-  const _TreatBagCard({required this.result});
+  const _TreatBagCard({super.key, required this.result});
 
   final MonthResult result;
 

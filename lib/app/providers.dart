@@ -222,6 +222,24 @@ final removedPocketMovementIdsProvider =
   RemovedPocketMovementIds.new,
 );
 
+/// Pide a Inicio que vuelva a mostrar el tutorial guiado ya mismo,
+/// aunque `AppSettings.hasSeenTutorial` ya sea `true` -- lo dispara el
+/// boton "Repetir tutorial" de Ajustes. `consume()` lo deja otra vez en
+/// `false` en cuanto Inicio ha arrancado el tutorial, para no repetirlo
+/// solo por reconstruirse.
+class ForceShowTutorial extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void trigger() => state = true;
+
+  void consume() => state = false;
+}
+
+final forceShowTutorialProvider = NotifierProvider<ForceShowTutorial, bool>(
+  ForceShowTutorial.new,
+);
+
 /// Papelera (Ajustes > Papelera, doc 08): purga primero lo que lleva mas
 /// de 30 dias, y devuelve lo que queda.
 final trashedMovementsProvider = FutureProvider<List<MovementView>>((ref) async {

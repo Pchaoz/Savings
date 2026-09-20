@@ -35,6 +35,17 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: '1.7',
+    date: '20/09/2026',
+    changes: [
+      'Tutorial guiado para quien abre la app por primera vez: señala la '
+          'bolsa de caprichos y el botón de apuntar un gasto, con un paso '
+          'a paso sencillo de "siguiente"/"saltar".',
+      'Nuevo botón "Repetir tutorial" en Ajustes > Personalización, por '
+          'si quieres volver a verlo.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.6.1',
     date: '20/09/2026',
     changes: [

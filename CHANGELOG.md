@@ -7,6 +7,15 @@ novedades se numera "X.Y" (p. ej. "1.6") y un arreglo sobre esa misma
 entrega se numera "X.Y.Z" (p. ej. "1.6.1") -- antes siempre se veían
 tres números más el número de build (p. ej. "1.6.0+7").
 
+## [1.7] - 2026-09-20
+
+### Añadido
+- Tutorial guiado en Inicio para quien abre la app por primera vez:
+  señala la bolsa de caprichos y el botón de apuntar un gasto, con un
+  paso a paso de "siguiente"/"saltar". Hecho a mano, sin librerías de
+  terceros, igual que el widget de pantalla de inicio.
+- Botón "Repetir tutorial" en Ajustes > Personalización.
+
 ## [1.6.1] - 2026-09-20
 
 ### Cambiado

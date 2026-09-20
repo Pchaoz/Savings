@@ -383,6 +383,17 @@ class SettingsScreen extends ConsumerWidget {
                       }
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.school_outlined),
+                    title: const Text('Repetir tutorial'),
+                    subtitle: const Text(
+                      'Vuelve a enseñarte la bolsa de caprichos y cómo apuntar un gasto.',
+                    ),
+                    onTap: () {
+                      ref.read(forceShowTutorialProvider.notifier).trigger();
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                  ),
                 ],
               );
             },

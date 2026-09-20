@@ -3863,6 +3863,21 @@ class $AppSettingsTable extends AppSettings
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _hasSeenTutorialMeta = const VerificationMeta(
+    'hasSeenTutorial',
+  );
+  @override
+  late final GeneratedColumn<bool> hasSeenTutorial = GeneratedColumn<bool>(
+    'has_seen_tutorial',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_seen_tutorial" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3870,6 +3885,7 @@ class $AppSettingsTable extends AppSettings
     showPocketsInTotal,
     dismissedTreatSweepYearMonth,
     monthStartDay,
+    hasSeenTutorial,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3922,6 +3938,15 @@ class $AppSettingsTable extends AppSettings
         ),
       );
     }
+    if (data.containsKey('has_seen_tutorial')) {
+      context.handle(
+        _hasSeenTutorialMeta,
+        hasSeenTutorial.isAcceptableOrUnknown(
+          data['has_seen_tutorial']!,
+          _hasSeenTutorialMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3951,6 +3976,10 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.int,
         data['${effectivePrefix}month_start_day'],
       ),
+      hasSeenTutorial: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_seen_tutorial'],
+      )!,
     );
   }
 
@@ -3989,12 +4018,21 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   /// Igual que `dayOfMonth` en `RecurringTemplates`, limitado a 1-28 para
   /// no pelearse con febrero.
   final int? monthStartDay;
+
+  /// Si ya se le enseño el tutorial guiado (bolsa de caprichos + como
+  /// apuntar un gasto) al menos una vez -- por defecto false, asi que a
+  /// una instalacion nueva se le ofrece automaticamente en Inicio. Se
+  /// pone a true tanto al terminar el tutorial entero como al pulsar
+  /// "Saltar tutorial" (las dos cuentan como "ya visto", para no volver a
+  /// insistir). "Ajustes > Repetir tutorial" lo pone de nuevo a false.
+  final bool hasSeenTutorial;
   const AppSettingsRow({
     required this.id,
     this.defaultTreatRate,
     required this.showPocketsInTotal,
     this.dismissedTreatSweepYearMonth,
     this.monthStartDay,
+    required this.hasSeenTutorial,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4012,6 +4050,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     if (!nullToAbsent || monthStartDay != null) {
       map['month_start_day'] = Variable<int>(monthStartDay);
     }
+    map['has_seen_tutorial'] = Variable<bool>(hasSeenTutorial);
     return map;
   }
 
@@ -4029,6 +4068,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       monthStartDay: monthStartDay == null && nullToAbsent
           ? const Value.absent()
           : Value(monthStartDay),
+      hasSeenTutorial: Value(hasSeenTutorial),
     );
   }
 
@@ -4045,6 +4085,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
         json['dismissedTreatSweepYearMonth'],
       ),
       monthStartDay: serializer.fromJson<int?>(json['monthStartDay']),
+      hasSeenTutorial: serializer.fromJson<bool>(json['hasSeenTutorial']),
     );
   }
   @override
@@ -4058,6 +4099,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
         dismissedTreatSweepYearMonth,
       ),
       'monthStartDay': serializer.toJson<int?>(monthStartDay),
+      'hasSeenTutorial': serializer.toJson<bool>(hasSeenTutorial),
     };
   }
 
@@ -4067,6 +4109,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     bool? showPocketsInTotal,
     Value<String?> dismissedTreatSweepYearMonth = const Value.absent(),
     Value<int?> monthStartDay = const Value.absent(),
+    bool? hasSeenTutorial,
   }) => AppSettingsRow(
     id: id ?? this.id,
     defaultTreatRate: defaultTreatRate.present
@@ -4079,6 +4122,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     monthStartDay: monthStartDay.present
         ? monthStartDay.value
         : this.monthStartDay,
+    hasSeenTutorial: hasSeenTutorial ?? this.hasSeenTutorial,
   );
   AppSettingsRow copyWithCompanion(AppSettingsCompanion data) {
     return AppSettingsRow(
@@ -4095,6 +4139,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       monthStartDay: data.monthStartDay.present
           ? data.monthStartDay.value
           : this.monthStartDay,
+      hasSeenTutorial: data.hasSeenTutorial.present
+          ? data.hasSeenTutorial.value
+          : this.hasSeenTutorial,
     );
   }
 
@@ -4107,7 +4154,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
           ..write(
             'dismissedTreatSweepYearMonth: $dismissedTreatSweepYearMonth, ',
           )
-          ..write('monthStartDay: $monthStartDay')
+          ..write('monthStartDay: $monthStartDay, ')
+          ..write('hasSeenTutorial: $hasSeenTutorial')
           ..write(')'))
         .toString();
   }
@@ -4119,6 +4167,7 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     showPocketsInTotal,
     dismissedTreatSweepYearMonth,
     monthStartDay,
+    hasSeenTutorial,
   );
   @override
   bool operator ==(Object other) =>
@@ -4129,7 +4178,8 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
           other.showPocketsInTotal == this.showPocketsInTotal &&
           other.dismissedTreatSweepYearMonth ==
               this.dismissedTreatSweepYearMonth &&
-          other.monthStartDay == this.monthStartDay);
+          other.monthStartDay == this.monthStartDay &&
+          other.hasSeenTutorial == this.hasSeenTutorial);
 }
 
 class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
@@ -4138,12 +4188,14 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   final Value<bool> showPocketsInTotal;
   final Value<String?> dismissedTreatSweepYearMonth;
   final Value<int?> monthStartDay;
+  final Value<bool> hasSeenTutorial;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
     this.defaultTreatRate = const Value.absent(),
     this.showPocketsInTotal = const Value.absent(),
     this.dismissedTreatSweepYearMonth = const Value.absent(),
     this.monthStartDay = const Value.absent(),
+    this.hasSeenTutorial = const Value.absent(),
   });
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
@@ -4151,6 +4203,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     this.showPocketsInTotal = const Value.absent(),
     this.dismissedTreatSweepYearMonth = const Value.absent(),
     this.monthStartDay = const Value.absent(),
+    this.hasSeenTutorial = const Value.absent(),
   });
   static Insertable<AppSettingsRow> custom({
     Expression<int>? id,
@@ -4158,6 +4211,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     Expression<bool>? showPocketsInTotal,
     Expression<String>? dismissedTreatSweepYearMonth,
     Expression<int>? monthStartDay,
+    Expression<bool>? hasSeenTutorial,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4167,6 +4221,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
       if (dismissedTreatSweepYearMonth != null)
         'dismissed_treat_sweep_year_month': dismissedTreatSweepYearMonth,
       if (monthStartDay != null) 'month_start_day': monthStartDay,
+      if (hasSeenTutorial != null) 'has_seen_tutorial': hasSeenTutorial,
     });
   }
 
@@ -4176,6 +4231,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     Value<bool>? showPocketsInTotal,
     Value<String?>? dismissedTreatSweepYearMonth,
     Value<int?>? monthStartDay,
+    Value<bool>? hasSeenTutorial,
   }) {
     return AppSettingsCompanion(
       id: id ?? this.id,
@@ -4184,6 +4240,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
       dismissedTreatSweepYearMonth:
           dismissedTreatSweepYearMonth ?? this.dismissedTreatSweepYearMonth,
       monthStartDay: monthStartDay ?? this.monthStartDay,
+      hasSeenTutorial: hasSeenTutorial ?? this.hasSeenTutorial,
     );
   }
 
@@ -4207,6 +4264,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     if (monthStartDay.present) {
       map['month_start_day'] = Variable<int>(monthStartDay.value);
     }
+    if (hasSeenTutorial.present) {
+      map['has_seen_tutorial'] = Variable<bool>(hasSeenTutorial.value);
+    }
     return map;
   }
 
@@ -4219,7 +4279,8 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
           ..write(
             'dismissedTreatSweepYearMonth: $dismissedTreatSweepYearMonth, ',
           )
-          ..write('monthStartDay: $monthStartDay')
+          ..write('monthStartDay: $monthStartDay, ')
+          ..write('hasSeenTutorial: $hasSeenTutorial')
           ..write(')'))
         .toString();
   }
@@ -7388,6 +7449,7 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<bool> showPocketsInTotal,
       Value<String?> dismissedTreatSweepYearMonth,
       Value<int?> monthStartDay,
+      Value<bool> hasSeenTutorial,
     });
 typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
@@ -7396,6 +7458,7 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<bool> showPocketsInTotal,
       Value<String?> dismissedTreatSweepYearMonth,
       Value<int?> monthStartDay,
+      Value<bool> hasSeenTutorial,
     });
 
 class $$AppSettingsTableFilterComposer
@@ -7429,6 +7492,11 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<int> get monthStartDay => $composableBuilder(
     column: $table.monthStartDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasSeenTutorial => $composableBuilder(
+    column: $table.hasSeenTutorial,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7467,6 +7535,11 @@ class $$AppSettingsTableOrderingComposer
     column: $table.monthStartDay,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get hasSeenTutorial => $composableBuilder(
+    column: $table.hasSeenTutorial,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AppSettingsTableAnnotationComposer
@@ -7499,6 +7572,11 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<int> get monthStartDay => $composableBuilder(
     column: $table.monthStartDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hasSeenTutorial => $composableBuilder(
+    column: $table.hasSeenTutorial,
     builder: (column) => column,
   );
 }
@@ -7540,12 +7618,14 @@ class $$AppSettingsTableTableManager
                 Value<String?> dismissedTreatSweepYearMonth =
                     const Value.absent(),
                 Value<int?> monthStartDay = const Value.absent(),
+                Value<bool> hasSeenTutorial = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
                 defaultTreatRate: defaultTreatRate,
                 showPocketsInTotal: showPocketsInTotal,
                 dismissedTreatSweepYearMonth: dismissedTreatSweepYearMonth,
                 monthStartDay: monthStartDay,
+                hasSeenTutorial: hasSeenTutorial,
               ),
           createCompanionCallback:
               ({
@@ -7555,12 +7635,14 @@ class $$AppSettingsTableTableManager
                 Value<String?> dismissedTreatSweepYearMonth =
                     const Value.absent(),
                 Value<int?> monthStartDay = const Value.absent(),
+                Value<bool> hasSeenTutorial = const Value.absent(),
               }) => AppSettingsCompanion.insert(
                 id: id,
                 defaultTreatRate: defaultTreatRate,
                 showPocketsInTotal: showPocketsInTotal,
                 dismissedTreatSweepYearMonth: dismissedTreatSweepYearMonth,
                 monthStartDay: monthStartDay,
+                hasSeenTutorial: hasSeenTutorial,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
