@@ -6,6 +6,21 @@
 /// fuera (o en el propio repositorio). Va de más reciente a más antigua.
 library;
 
+/// Convierte la version tecnica de pubspec/Android (p. ej. "1.6.0" o
+/// "1.6.1") en el formato que se muestra en la app y en el changelog:
+/// sin el ".0" final cuando la entrega no trae ningun arreglo despues
+/// de la version con novedades (p. ej. "1.6"), o con el tercer numero
+/// tal cual cuando si es un arreglo sobre esa misma version (p. ej.
+/// "1.6.1"). El numero de build (`+N`) nunca se muestra aqui.
+String displayVersion(String pubspecVersion) {
+  final base = pubspecVersion.split('+').first;
+  final parts = base.split('.');
+  if (parts.length == 3 && parts[2] == '0') {
+    return '${parts[0]}.${parts[1]}';
+  }
+  return base;
+}
+
 class ChangelogEntry {
   const ChangelogEntry({
     required this.version,
@@ -20,7 +35,17 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
-    version: '1.6.0+7',
+    version: '1.6.1',
+    date: '20/09/2026',
+    changes: [
+      'Nuevo formato de numero de version: una entrega con novedades se '
+          'muestra como, por ejemplo, "1.6", y un arreglo sobre esa misma '
+          'entrega se muestra como "1.6.1" (antes se veia siempre con tres '
+          'numeros y el numero de build, tipo "1.6.0+7").',
+    ],
+  ),
+  ChangelogEntry(
+    version: '1.6',
     date: '19/09/2026',
     changes: [
       'Arreglado: el widget de la bolsa de caprichos se quedaba siempre '
@@ -30,7 +55,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.5.0+6',
+    version: '1.5',
     date: '19/09/2026',
     changes: [
       'Widget de pantalla de inicio del teléfono con la bolsa de '
@@ -39,7 +64,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.4.0+5',
+    version: '1.4',
     date: '19/09/2026',
     changes: [
       'Nueva pantalla "Acerca de" en Ajustes, con la versión instalada y '
@@ -47,7 +72,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.3.0+4',
+    version: '1.3',
     date: '19/09/2026',
     changes: [
       'Comparativa entre meses en el resumen de categorías de "Evolución '
@@ -56,7 +81,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.2.0+3',
+    version: '1.2',
     date: '01/09/2026',
     changes: [
       '"Mes de nómina a nómina": ajuste opcional en Ajustes > '
@@ -74,7 +99,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.1.0+2',
+    version: '1.1',
     date: '29/08/2026',
     changes: [
       'Huchas de ahorro: crear, meter/sacar dinero, meta opcional, '
@@ -94,7 +119,7 @@ const appChangelog = <ChangelogEntry>[
     ],
   ),
   ChangelogEntry(
-    version: '1.0.0+1',
+    version: '1.0',
     date: 'agosto 2026',
     changes: [
       'Primera versión: gastos e ingresos, categorías, accesos rápidos, '

@@ -1,4 +1,4 @@
-# savings — control de gastos personales
+# Savings — control de gastos personales
 
 App Android de control de gastos y ahorro, hecha a medida a partir del
 presupuesto que antes se llevaba en una hoja de Excel. Funciona

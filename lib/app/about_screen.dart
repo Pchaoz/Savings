@@ -36,12 +36,12 @@ class AboutScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(info?.appName ?? 'savings', style: T.amountLarge),
+                      Text(info?.appName ?? 'Savings', style: T.amountLarge),
                       const SizedBox(height: 4),
                       Text(
                         info == null
                             ? 'Cargando versión…'
-                            : 'Versión ${info.version} (build ${info.buildNumber})',
+                            : 'Versión ${displayVersion(info.version)} (build ${info.buildNumber})',
                         style: T.body.copyWith(color: C.inkDim),
                       ),
                     ],
