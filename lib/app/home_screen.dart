@@ -23,6 +23,7 @@ import '../domain/models/models.dart';
 import 'add_expense_screen.dart';
 import 'coach_mark_overlay.dart';
 import 'movements_screen.dart';
+import 'onboarding_screen.dart';
 import 'pockets_screen.dart';
 import 'providers.dart';
 import 'savings_chart_screen.dart';
@@ -40,6 +41,8 @@ String _formatYearMonth(String yearMonth) {
 }
 
 final _treatBagCardKey = GlobalKey();
+final _pocketsButtonKey = GlobalKey();
+final _chartButtonKey = GlobalKey();
 final _addExpenseButtonKey = GlobalKey();
 bool _tutorialTriggeredThisSession = false;
 
@@ -78,6 +81,7 @@ class HomeScreen extends ConsumerWidget {
         title: const Text('Savings'),
         actions: [
           IconButton(
+            key: _pocketsButtonKey,
             icon: const Icon(Icons.savings_outlined),
             tooltip: 'Huchas de ahorro',
             onPressed: () => Navigator.of(context).push(
@@ -85,6 +89,7 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
           IconButton(
+            key: _chartButtonKey,
             icon: const Icon(Icons.show_chart),
             tooltip: 'Evolución del ahorro',
             onPressed: () => Navigator.of(context).push(
@@ -123,10 +128,28 @@ class HomeScreen extends ConsumerWidget {
                 (forceShowTutorial ||
                     (!alreadySeenTutorial && !_tutorialTriggeredThisSession))) {
               _tutorialTriggeredThisSession = true;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
                 if (!context.mounted) return;
                 if (forceShowTutorial) {
                   ref.read(forceShowTutorialProvider.notifier).consume();
+                }
+                // El asistente (`OnboardingScreen`) configura de verdad los
+                // datos -- saldo inicial, nómina, margen de caprichos --;
+                // el coachmark de después solo señala dónde está cada cosa
+                // en la pantalla. "Saltar tutorial" dentro del asistente
+                // corta también el coachmark: ya ha dicho que no quiere
+                // nada de esto (ver doc onboarding_screen.dart).
+                final completed = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => const OnboardingScreen(),
+                    fullscreenDialog: true,
+                  ),
+                );
+                if (!context.mounted) return;
+                if (completed == false) {
+                  await ref.read(repositoryProvider).setHasSeenTutorial(true);
+                  ref.invalidate(appSettingsProvider);
+                  return;
                 }
                 showCoachMarks(
                   context: context,
@@ -138,6 +161,19 @@ class HomeScreen extends ConsumerWidget {
                           'fijos y variables, se aparta aquí automáticamente '
                           'un margen — el dinero que puedes gastar en cosas '
                           'no esenciales sin tocar tu ahorro real.',
+                    ),
+                    CoachMarkStep(
+                      targetKey: _pocketsButtonKey,
+                      title: 'Huchas de ahorro',
+                      message: 'Aquí puedes crear huchas con nombre propio '
+                          'para ahorrar con una meta concreta, sin que '
+                          'cuente como gastado.',
+                    ),
+                    CoachMarkStep(
+                      targetKey: _chartButtonKey,
+                      title: 'Evolución del ahorro',
+                      message: 'Y aquí, una gráfica de cómo ha ido tu ahorro '
+                          'mes a mes.',
                     ),
                     CoachMarkStep(
                       targetKey: _addExpenseButtonKey,

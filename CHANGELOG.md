@@ -7,6 +7,19 @@ novedades se numera "X.Y" (p. ej. "1.6") y un arreglo sobre esa misma
 entrega se numera "X.Y.Z" (p. ej. "1.6.1") -- antes siempre se veían
 tres números más el número de build (p. ej. "1.6.0+7").
 
+## [1.7.1] - 2026-09-20
+
+### Cambiado
+- El tutorial guiado de Inicio pasa de señalar dos botones a ser un
+  asistente que configura la app de verdad: saldo inicial, nómina (si
+  cobras una) y margen de caprichos, además de destacar las huchas de
+  ahorro, la gráfica de evolución del ahorro y los recurrentes (gastos
+  e ingresos que se repiten cada mes, trimestre o año) antes del
+  repaso guiado de siempre.
+- "Repetir tutorial" (Ajustes > Personalización) ya no vuelve a pedir
+  la nómina si ya había una configurada -- evita crear una segunda por
+  error.
+
 ## [1.7] - 2026-09-20
 
 ### Añadido

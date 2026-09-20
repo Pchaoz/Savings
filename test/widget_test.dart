@@ -2,6 +2,7 @@
 /// -> motor -> pantalla real. Sin tocar disco ni depender de un emulador.
 library;
 
+import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,23 @@ void main() {
   testWidgets('la pantalla de inicio arranca y muestra la bolsa a cero', (tester) async {
     final testDb = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(testDb.close);
+
+    // Se marca el tutorial guiado como ya visto: este test es una prueba
+    // de humo de la pantalla de Inicio en si, no del asistente de
+    // bienvenida (`OnboardingScreen`) -- sin esto, una base de datos
+    // recien creada dispara el asistente a pantalla completa nada mas
+    // arrancar, y el texto de la bolsa deja de "verse" para el test
+    // (Flutter no cuenta lo que queda debajo de otra ruta como visible).
+    // El asistente y el coachmark tienen su propia cobertura aparte (ver
+    // el grupo "tutorial guiado" en savings_repository_test.dart).
+    //
+    // `insertOnConflictUpdate` y no `insert`: el propio `onCreate` de la
+    // base de datos ya siembra una fila de `AppSettings` con id 0 en una
+    // instalacion nueva (ver comentario de `getAppSettings`), asi que
+    // insertar a secas aqui chocaba con un "UNIQUE constraint failed".
+    await testDb.into(testDb.appSettings).insertOnConflictUpdate(
+          AppSettingsCompanion.insert(id: Value(0), hasSeenTutorial: Value(true)),
+        );
 
     await tester.pumpWidget(
       ProviderScope(

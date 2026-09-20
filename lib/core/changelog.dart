@@ -35,6 +35,24 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: '1.7.1',
+    date: '20/09/2026',
+    changes: [
+      'El tutorial guiado de Inicio pasa de señalar dos botones a ser un '
+          'asistente que configura la app de verdad: ayuda a poner el '
+          'saldo inicial, dar de alta la nómina (si cobras una) y '
+          'ajustar el margen de caprichos.',
+      'El asistente termina destacando las huchas de ahorro, la '
+          'gráfica de evolución del ahorro y los recurrentes (gastos e '
+          'ingresos que se repiten cada mes, trimestre o año), y '
+          'después sigue con el mismo repaso guiado de la bolsa de '
+          'caprichos y el botón de apuntar un gasto.',
+      'Repetir el tutorial desde Ajustes ya no vuelve a pedir la '
+          'nómina si ya la tenías configurada -- solo la enseña, para no '
+          'crear una segunda por error.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.7',
     date: '20/09/2026',
     changes: [
