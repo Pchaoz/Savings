@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Version en rojo (C.spend) de widget_progress_go.xml, para cuando el
+     mes esta en negativo. Ver el comentario de ese fichero para el
+     porque de tener dos drawables fijos en vez de tintar uno solo. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#2E3743" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="3dp" />
+                <solid android:color="#E8705F" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Relleno verde de la barra de progreso del widget, mismo color que
+     C.go en core/theme/tokens.dart. Drawable estatico a proposito (nada
+     de tintado en tiempo de ejecucion): las APIs de RemoteViews para
+     cambiar el tinte de un ProgressBar solo existen desde Android 12
+     (API 31), asi que en vez de arriesgarnos a que el widget falle en un
+     movil mas viejo, hay dos drawables fijos (este y widget_progress_spend.xml)
+     y el codigo Kotlin simplemente ensena uno u otro segun el mes este en
+     positivo o en negativo. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <corners android:radius="3dp" />
+            <solid android:color="#2E3743" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <corners android:radius="3dp" />
+                <solid android:color="#4FD48C" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

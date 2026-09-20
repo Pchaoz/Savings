@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Metadatos del widget "Bolsa de caprichos disponible" (pantalla de
+  inicio del telefono, no confundir con la pantalla Inicio de la app).
+
+  updatePeriodMillis="0": sin refresco periodico en segundo plano, a
+  proposito. Pol pidio que se actualice solo al abrir la app, asi que
+  el propio Flutter empuja el dato nuevo (ver TreatBagWidgetProvider.kt
+  y MainActivity.kt), nunca Android en un temporizador.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/treat_bag_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:previewImage="@mipmap/ic_launcher"
+    android:description="@string/treat_bag_widget_description" />

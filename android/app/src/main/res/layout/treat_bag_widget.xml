@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layout del widget: RemoteViews, no Compose/Glance, a proposito, para
+  no anadir esa dependencia nueva solo para ensenar un numero. Ver el
+  comentario de arriba en treat_bag_widget_info.xml.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/widget_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/treat_bag_widget_label"
+        android:textSize="10sp"
+        android:textColor="#5C6775"
+        android:letterSpacing="0.1"
+        android:fontFamily="sans-serif-medium" />
+
+    <TextView
+        android:id="@+id/widget_amount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="&#8212;"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="#4FD48C"
+        android:fontFamily="sans-serif-medium" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp">
+
+        <ProgressBar
+            android:id="@+id/widget_progress_go"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress_go"
+            android:visibility="visible" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress_spend"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress_spend"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+</LinearLayout>

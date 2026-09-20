@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="treat_bag_widget_label">A CAPRICHOS</string>
+    <string name="treat_bag_widget_description">Bolsa de caprichos disponible</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mismo fondo/radio que las tarjetas de la app (C.surface / R.container
+     en core/theme/tokens.dart), pero hardcodeado aqui, porque Android no
+     puede leer los tokens de Dart directamente. Si algun dia cambian los
+     tokens, recordar tocar tambien este fichero. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1B212A" />
+    <corners android:radius="14dp" />
+</shape>
