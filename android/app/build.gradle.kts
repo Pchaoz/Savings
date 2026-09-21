@@ -24,7 +24,10 @@ android {
         applicationId = "com.pchaozz.savings"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // local_auth (bloqueo con huella/cara, Ajustes > Bloqueo de la
+        // app, 21/09/2026) exige minSdk 23 (androidx.biometric) -- se
+        // respeta el de Flutter si algun dia sube por encima de eso.
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

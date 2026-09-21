@@ -240,6 +240,27 @@ final forceShowTutorialProvider = NotifierProvider<ForceShowTutorial, bool>(
   ForceShowTutorial.new,
 );
 
+/// Avisa a `AppLockGate` (main.dart) de que la app se va a pausar por
+/// algo que ELLA MISMA ha abierto (el selector nativo de guardar/elegir
+/// fichero de la copia de seguridad, `settings_screen.dart`), no porque
+/// Pol haya salido de verdad a otra app. Sin esto, elegir dónde guardar
+/// la copia de seguridad habría vuelto a pedir el PIN nada más volver del
+/// selector, en mitad de esa misma acción -- molesto y sin sentido, ese
+/// selector es parte del propio flujo de la app. `suspend()` antes de
+/// abrir el selector, `resume()` en un `finally` al volver de él.
+class AppLockSuspend extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void suspend() => state = true;
+
+  void resume() => state = false;
+}
+
+final appLockSuspendedProvider = NotifierProvider<AppLockSuspend, bool>(
+  AppLockSuspend.new,
+);
+
 /// Papelera (Ajustes > Papelera, doc 08): purga primero lo que lleva mas
 /// de 30 dias, y devuelve lo que queda.
 final trashedMovementsProvider = FutureProvider<List<MovementView>>((ref) async {

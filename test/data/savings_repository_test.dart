@@ -718,4 +718,48 @@ void main() {
       expect((await repo.getAppSettings()).hasSeenTutorial, isFalse);
     });
   });
+
+  group('bloqueo de la app con PIN (setAppLockPin/verifyAppLockPin)', () {
+    test('por defecto el bloqueo esta desactivado y sin PIN guardado', () async {
+      final settings = await repo.getAppSettings();
+      expect(settings.appLockEnabled, isFalse);
+      expect(settings.appLockPinHash, isNull);
+      expect(settings.appLockPinSalt, isNull);
+    });
+
+    test('poner un PIN activa el bloqueo y lo verifica bien', () async {
+      await repo.setAppLockPin('1234');
+
+      final settings = await repo.getAppSettings();
+      expect(settings.appLockEnabled, isTrue);
+      expect(settings.appLockPinHash, isNotNull);
+      expect(settings.appLockPinSalt, isNotNull);
+
+      expect(await repo.verifyAppLockPin('1234'), isTrue);
+      expect(await repo.verifyAppLockPin('0000'), isFalse);
+    });
+
+    test('cambiar el PIN invalida el anterior', () async {
+      await repo.setAppLockPin('1234');
+      await repo.setAppLockPin('5678');
+
+      expect(await repo.verifyAppLockPin('1234'), isFalse);
+      expect(await repo.verifyAppLockPin('5678'), isTrue);
+    });
+
+    test('desactivar el bloqueo olvida el PIN', () async {
+      await repo.setAppLockPin('1234');
+      await repo.disableAppLock();
+
+      final settings = await repo.getAppSettings();
+      expect(settings.appLockEnabled, isFalse);
+      expect(settings.appLockPinHash, isNull);
+      expect(settings.appLockPinSalt, isNull);
+      expect(await repo.verifyAppLockPin('1234'), isFalse);
+    });
+
+    test('sin bloqueo activado, verificar cualquier PIN da false', () async {
+      expect(await repo.verifyAppLockPin('1234'), isFalse);
+    });
+  });
 }

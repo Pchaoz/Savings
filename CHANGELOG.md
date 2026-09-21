@@ -7,6 +7,19 @@ novedades se numera "X.Y" (p. ej. "1.6") y un arreglo sobre esa misma
 entrega se numera "X.Y.Z" (p. ej. "1.6.1") -- antes siempre se veían
 tres números más el número de build (p. ej. "1.6.0+7").
 
+## [1.7.2] - 2026-09-21
+
+### Añadido
+- Bloqueo opcional de la app con PIN (Ajustes > Bloqueo de la app):
+  pide el PIN al abrir la app o al volver de segundo plano, con la
+  huella o la cara como atajo mas rapido si el movil lo soporta.
+
+### Cambiado
+- Guardar la copia de seguridad ya no abre el panel de compartir de
+  Android: ahora se elige directamente la carpeta donde guardarla
+  (Descargas, Drive, una tarjeta SD...), para poder encontrarla
+  despues con mas facilidad.
+
 ## [1.7.1] - 2026-09-20
 
 ### Cambiado

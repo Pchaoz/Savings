@@ -1,7 +1,7 @@
 package com.pchaozz.savings
 
 import android.content.Context
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -12,8 +12,13 @@ import io.flutter.plugin.common.MethodChannel
  * `TreatBagWidgetProvider` lo pinte en el widget de pantalla de inicio.
  * No hace ningun calculo aqui -- Flutter siempre manda el texto ya listo
  * ("21,85 €"), este canal solo lo traslada.
+ *
+ * Extiende `FlutterFragmentActivity` (no `FlutterActivity`) desde
+ * 21/09/2026: lo exige `local_auth` para el bloqueo con huella/cara
+ * (Ajustes > Bloqueo de la app), porque el dialogo de biometria de
+ * androidx.biometric necesita una `FragmentActivity` por debajo.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "com.pchaozz.savings/treat_widget"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -235,6 +235,15 @@ class AppSettings extends Table {
   /// insistir). "Ajustes > Repetir tutorial" lo pone de nuevo a false.
   BoolColumn get hasSeenTutorial => boolean().withDefault(const Constant(false))();
 
+  /// Bloqueo opcional de la app con PIN (con huella/cara como atajo si el
+  /// móvil lo soporta) -- Ajustes > Bloqueo de la app, pedido por Pol el
+  /// 21/09/2026. Por defecto desactivado. El PIN nunca se guarda en
+  /// claro: solo su hash (`appLockPinHash`) junto con la sal aleatoria
+  /// usada para calcularlo (`appLockPinSalt`), ver `core/pin_hash.dart`.
+  BoolColumn get appLockEnabled => boolean().withDefault(const Constant(false))();
+  TextColumn get appLockPinHash => text().nullable()();
+  TextColumn get appLockPinSalt => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

@@ -59,6 +59,8 @@ A partir de esa idea, la app cubre:
   saldo real.
 - **Gráfica de evolución del ahorro** mes a mes.
 - **Copia de seguridad y restauración** de toda la base de datos.
+- **Bloqueo opcional de la app con PIN** (con huella/cara como atajo si
+  el móvil lo soporta), al abrir la app o al volver de segundo plano.
 - **Widget de pantalla de inicio de Android** con el disponible actual de
   la bolsa de caprichos y una barra de progreso.
 
@@ -165,8 +167,11 @@ Desde **Ajustes**:
 
 - **Copia de seguridad**: genera un volcado completo y consistente de la
   base de datos (con `VACUUM INTO`, así que funciona aunque la app esté
-  en uso) y lo comprime como `.zip` para poder compartirlo por
-  WhatsApp, Drive, correo, etc. sin que Android le cambie la extensión.
+  en uso), lo comprime como `.zip` y abre el selector nativo de Android
+  para elegir dónde guardarlo (una carpeta de Descargas, Drive, una
+  tarjeta SD, etc.), en vez de abrir el panel de compartir de siempre.
+  Así el fichero queda donde tú decidas y es más fácil de encontrar
+  luego.
 - **Restaurar copia de seguridad**: pide confirmación explícita (la
   operación sobrescribe todos los datos actuales y no se puede deshacer
   desde la app) y, antes de tocar nada, genera automáticamente una copia
@@ -174,7 +179,7 @@ Desde **Ajustes**:
   `.zip` (o `.sqlite`/`.bin` de copias antiguas) a restaurar.
 
 Se recomienda hacer una copia de seguridad de vez en cuando y guardarla
-fuera del teléfono (Drive, correo propio, etc.), ya que toda la
+fuera del teléfono (Drive, una carpeta en la nube, etc.), ya que toda la
 información vive únicamente en el dispositivo.
 
 ## Widget de pantalla de inicio

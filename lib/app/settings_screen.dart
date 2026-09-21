@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:archive/archive.dart';
 
@@ -48,20 +47,16 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  /// Genera una copia de la base de datos entera (VACUUM INTO, ver
-  /// `SavingsRepository.backupDatabaseTo`) y abre el panel nativo de
-  /// compartir para que el usuario decida donde guardarla — Google
-  /// Drive, un email a si mismo, WhatsApp... La copia se genera en la
-  /// carpeta temporal de la app, solo para poder compartirla; no se
-  /// queda guardada dentro de la app.
-  /// Genera un `.sqlite` con `backupDatabaseTo` y lo comprime en un
-  /// `.zip` junto a el (mismo directorio, mismo nombre base), borrando el
-  /// `.sqlite` suelto al terminar. Se comparte/guarda SIEMPRE como `.zip`
-  /// y nunca como `.sqlite` suelto: Android no reconoce esa extensión, y
-  /// muchas apps (Drive, Archivos...) le cambian el nombre a algo con
-  /// ".bin" sin avisar en cuanto sale de la app — pasaba tanto al
-  /// compartir "Copia de seguridad" como, hasta este arreglo, en la copia
-  /// de seguridad automática que se guarda antes de restaurar.
+  /// Genera un `.sqlite` con `backupDatabaseTo` (VACUUM INTO, ver
+  /// `SavingsRepository.backupDatabaseTo`) y lo comprime en un `.zip`
+  /// junto a el (mismo directorio, mismo nombre base), borrando el
+  /// `.sqlite` suelto al terminar. Se guarda SIEMPRE como `.zip` y nunca
+  /// como `.sqlite` suelto: Android no reconoce esa extensión, y muchas
+  /// apps (Drive, Archivos...) le cambian el nombre a algo con ".bin"
+  /// sin avisar en cuanto sale de la app -- pasaba tanto al compartir
+  /// "Copia de seguridad" (antes de este cambio) como, hasta un arreglo
+  /// anterior, en la copia de seguridad automática que se guarda antes
+  /// de restaurar.
   Future<String> _zippedBackup(WidgetRef ref, String baseName) async {
     final tmpDir = await getTemporaryDirectory();
     final sqliteName = '$baseName.sqlite';
@@ -81,22 +76,55 @@ class SettingsScreen extends ConsumerWidget {
     return zipPath;
   }
 
+  /// Genera la copia y abre el selector nativo de "Guardar como" para que
+  /// el usuario elija carpeta y nombre -- a petición de Pol (20/09/2026),
+  /// en vez del panel de compartir de antes, que obligaba a pasar por
+  /// WhatsApp/Drive/email para acabar guardándola en algún sitio del
+  /// teléfono. Se le pasan los `bytes` directamente a `FilePicker.saveFile`
+  /// porque en Android el sitio elegido es un `content://` de Storage
+  /// Access Framework, no una ruta normal de `dart:io` en la que se
+  /// pueda escribir con `File(...).writeAsBytes`; es el propio plugin
+  /// quien escribe ahí. El `.zip` temporal se borra en cuanto se copia
+  /// (se haya guardado o cancelado), igual que antes con el panel de
+  /// compartir.
   Future<void> _backup(BuildContext context, WidgetRef ref) async {
+    String? zipPath;
     try {
       final stamp = _backupTimestamp(DateTime.now());
-      final zipPath = await _zippedBackup(ref, 'savings_backup_$stamp');
+      zipPath = await _zippedBackup(ref, 'savings_backup_$stamp');
+      final zipBytes = await File(zipPath).readAsBytes();
 
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(zipPath)],
-          subject: 'Copia de seguridad de Savings ($stamp)',
-        ),
+      // Suspende el re-bloqueo mientras el selector nativo esta abierto --
+      // Android pausa la app al mostrarlo, y sin esto volver de elegir
+      // carpeta pediria el PIN de nuevo en mitad de esta misma accion
+      // (ver `appLockSuspendedProvider`).
+      ref.read(appLockSuspendedProvider.notifier).suspend();
+      final Uri? savedPath;
+      try {
+        savedPath = await FilePicker.saveFile(
+          dialogTitle: 'Guardar copia de seguridad',
+          fileName: 'savings_backup_$stamp.zip',
+          bytes: zipBytes,
+        );
+      } finally {
+        ref.read(appLockSuspendedProvider.notifier).resume();
+      }
+
+      if (!context.mounted) return;
+      if (savedPath == null) return; // cancelado por el usuario
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Copia de seguridad guardada.')),
       );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No se pudo hacer la copia: $e')),
         );
+      }
+    } finally {
+      if (zipPath != null && await File(zipPath).exists()) {
+        await File(zipPath).delete();
       }
     }
   }
@@ -108,10 +136,19 @@ class SettingsScreen extends ConsumerWidget {
   /// automaticamente una copia de seguridad de los datos actuales (por si
   /// el usuario se equivoca de fichero o se arrepiente).
   Future<void> _restore(BuildContext context, WidgetRef ref) async {
-    final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Elige la copia de seguridad',
-      type: FileType.any,
-    );
+    // Mismo motivo que en `_backup`: sin esto, elegir el fichero
+    // pediria el PIN de nuevo en mitad de esta misma accion al volver
+    // del selector nativo.
+    ref.read(appLockSuspendedProvider.notifier).suspend();
+    final List<PlatformFile> picked;
+    try {
+      picked = await FilePicker.pickFiles(
+        dialogTitle: 'Elige la copia de seguridad',
+        type: FileType.any,
+      );
+    } finally {
+      ref.read(appLockSuspendedProvider.notifier).resume();
+    }
     if (picked.isEmpty) return;
     final pickedPath = picked.first.path;
     if (pickedPath == null) return;
@@ -226,6 +263,18 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _openAppLockSheet(BuildContext context, bool currentlyEnabled) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
+      ),
+      builder: (_) => _AppLockSheet(currentlyEnabled: currentlyEnabled),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsAsync = ref.watch(appSettingsProvider);
@@ -328,6 +377,17 @@ class SettingsScreen extends ConsumerWidget {
               final ratePercent = ((settings.defaultTreatRate ?? kDefaultTreatRate) * 100).round();
               return Column(
                 children: [
+                  ListTile(
+                    leading: Icon(settings.appLockEnabled ? Icons.lock : Icons.lock_open),
+                    title: const Text('Bloqueo de la app'),
+                    subtitle: Text(
+                      settings.appLockEnabled
+                          ? 'Activado: pide el PIN (o huella/cara) al abrir la app'
+                          : 'Desactivado: la app se abre sin pedir nada',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _openAppLockSheet(context, settings.appLockEnabled),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.percent),
                     title: const Text('Margen de caprichos'),
@@ -761,3 +821,235 @@ class _MonthStartDaySheetState extends ConsumerState<_MonthStartDaySheet> {
   }
 }
 
+
+/// Hoja para activar/cambiar/desactivar el bloqueo de la app con PIN (+
+/// huella/cara como atajo si el móvil lo soporta) -- Ajustes > Bloqueo de
+/// la app, pedido por Pol el 21/09/2026 junto con el buscador de
+/// movimientos, y llevado a la misma 1.7.2 que el cambio de la copia de
+/// seguridad para no subir tantas versiones seguidas.
+///
+/// El PIN se guarda solo como hash + sal (`core/pin_hash.dart`,
+/// `SavingsRepository.setAppLockPin`) -- nunca en claro. A propósito NO
+/// hay ningún "olvidé mi PIN" que lo salte desde dentro de la app: si se
+/// pudiera saltar así, cualquiera con el móvil desbloqueado podría
+/// saltárselo igual, y el bloqueo no serviría de nada. La única salida si
+/// se olvida es borrar los datos de la app o desinstalarla -- de ahí el
+/// aviso al activarlo.
+class _AppLockSheet extends ConsumerStatefulWidget {
+  const _AppLockSheet({required this.currentlyEnabled});
+
+  final bool currentlyEnabled;
+
+  @override
+  ConsumerState<_AppLockSheet> createState() => _AppLockSheetState();
+}
+
+class _AppLockSheetState extends ConsumerState<_AppLockSheet> {
+  static const _pinLength = 4;
+
+  String _step1 = '';
+  String _step2 = '';
+  bool _confirming = false;
+  bool _mismatch = false;
+  bool _saving = false;
+
+  void _onDigit(int d) {
+    if (_saving) return;
+    setState(() {
+      _mismatch = false;
+      if (!_confirming) {
+        if (_step1.length < _pinLength) _step1 += d.toString();
+        if (_step1.length == _pinLength) _confirming = true;
+      } else {
+        if (_step2.length < _pinLength) _step2 += d.toString();
+        if (_step2.length == _pinLength) _submit();
+      }
+    });
+  }
+
+  void _backspace() {
+    if (_saving) return;
+    setState(() {
+      _mismatch = false;
+      if (_confirming) {
+        if (_step2.isNotEmpty) {
+          _step2 = _step2.substring(0, _step2.length - 1);
+        } else {
+          _confirming = false;
+          _step1 = _step1.substring(0, _step1.length - 1);
+        }
+      } else if (_step1.isNotEmpty) {
+        _step1 = _step1.substring(0, _step1.length - 1);
+      }
+    });
+  }
+
+  Future<void> _submit() async {
+    if (_step1 != _step2) {
+      setState(() {
+        _mismatch = true;
+        _step1 = '';
+        _step2 = '';
+        _confirming = false;
+      });
+      return;
+    }
+    setState(() => _saving = true);
+    await ref.read(repositoryProvider).setAppLockPin(_step1);
+    ref.invalidate(appSettingsProvider);
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bloqueo activado.')),
+      );
+    }
+  }
+
+  Future<void> _disable() async {
+    setState(() => _saving = true);
+    await ref.read(repositoryProvider).disableAppLock();
+    ref.invalidate(appSettingsProvider);
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bloqueo desactivado.')),
+      );
+    }
+  }
+
+  void _openChangePin() {
+    Navigator.of(context).pop();
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
+      ),
+      builder: (_) => const _AppLockSheet(currentlyEnabled: false),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.currentlyEnabled) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('BLOQUEO DE LA APP', style: T.eyebrow),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.lock_reset),
+                title: const Text('Cambiar PIN'),
+                onTap: _openChangePin,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.lock_open, color: C.spend),
+                title: const Text('Desactivar bloqueo'),
+                onTap: _saving ? null : _disable,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final current = _confirming ? _step2 : _step1;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('BLOQUEO DE LA APP', style: T.eyebrow),
+            const SizedBox(height: 8),
+            Text(
+              _confirming ? 'Repite el PIN para confirmarlo' : 'Elige un PIN de 4 dígitos',
+              style: T.body,
+            ),
+            if (_mismatch) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'Los dos PIN no coinciden, prueba otra vez',
+                style: TextStyle(fontSize: 12, color: C.spend),
+              ),
+            ],
+            const SizedBox(height: 4),
+            const Text(
+              'Recuérdalo bien: si lo olvidas, la única forma de volver a '
+              'entrar es borrar los datos de la app o desinstalarla '
+              '(perderás lo que no tengas en una copia de seguridad).',
+              style: T.meta,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(_pinLength, (i) {
+                final filled = i < current.length;
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: filled ? C.ink : Colors.transparent,
+                    border: Border.all(color: C.line, width: 1.5),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 12),
+            _SetupPinKeypad(onDigit: _onDigit, onBackspace: _backspace),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Mismo estilo que `_PinKeypad` en `lock_screen.dart` -- copia aparte
+/// porque cada fichero es su propia librería en Dart y esta clase es
+/// privada (mismo patrón que ya usa el proyecto con `_Keypad` en
+/// `add_expense_screen.dart`, `adjustment_screen.dart`,
+/// `edit_movement_screen.dart` y `pocket_detail_screen.dart`).
+class _SetupPinKeypad extends StatelessWidget {
+  const _SetupPinKeypad({required this.onDigit, required this.onBackspace});
+
+  final ValueChanged<int> onDigit;
+  final VoidCallback onBackspace;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget key(String label, VoidCallback onTap) {
+      return Expanded(
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(height: 56, child: Center(child: Text(label, style: T.amountLarge))),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(children: [key('1', () => onDigit(1)), key('2', () => onDigit(2)), key('3', () => onDigit(3))]),
+        Row(children: [key('4', () => onDigit(4)), key('5', () => onDigit(5)), key('6', () => onDigit(6))]),
+        Row(children: [key('7', () => onDigit(7)), key('8', () => onDigit(8)), key('9', () => onDigit(9))]),
+        Row(children: [
+          const Expanded(child: SizedBox()),
+          key('0', () => onDigit(0)),
+          key('⌫', onBackspace),
+        ]),
+      ],
+    );
+  }
+}

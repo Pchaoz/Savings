@@ -35,6 +35,20 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: '1.7.2',
+    date: '21/09/2026',
+    changes: [
+      'Guardar la copia de seguridad ya no abre el panel de compartir '
+          'de Android: ahora se elige directamente la carpeta donde '
+          'guardarla (Descargas, Drive, una tarjeta SD...), para poder '
+          'encontrarla despues con mas facilidad.',
+      'Nuevo bloqueo opcional de la app con PIN (Ajustes > Bloqueo de '
+          'la app): pide el PIN al abrir la app o al volver de segundo '
+          'plano, con la huella o la cara como atajo mas rapido si el '
+          'movil lo soporta.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.7.1',
     date: '20/09/2026',
     changes: [

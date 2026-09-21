@@ -43,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -128,6 +128,17 @@ class AppDatabase extends _$AppDatabase {
           // apertura, y puede saltarlo con un toque.
           if (from < 9) {
             await m.addColumn(appSettings, appSettings.hasSeenTutorial);
+          }
+          // v10: bloqueo opcional de la app con PIN (+ huella/cara como
+          // atajo si el movil lo soporta) -- Ajustes > Bloqueo de la app,
+          // pedido por Pol el 21/09/2026. Tres columnas nuevas, todas con
+          // un valor por defecto o nullable, asi que quien ya tenia la
+          // app instalada no pierde nada: sigue sin bloqueo hasta que lo
+          // active el mismo desde Ajustes.
+          if (from < 10) {
+            await m.addColumn(appSettings, appSettings.appLockEnabled);
+            await m.addColumn(appSettings, appSettings.appLockPinHash);
+            await m.addColumn(appSettings, appSettings.appLockPinSalt);
           }
         },
       );

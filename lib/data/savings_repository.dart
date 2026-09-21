@@ -9,6 +9,7 @@ library;
 
 import 'package:drift/drift.dart';
 
+import '../core/pin_hash.dart';
 import '../domain/engine/month_calculator.dart';
 import '../domain/models/models.dart';
 import 'database.dart';
@@ -1139,6 +1140,44 @@ class SavingsRepository {
     await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
       AppSettingsCompanion(monthStartDay: Value(day)),
     );
+  }
+
+  /// Activa el bloqueo de la app con un PIN nuevo, o lo cambia si ya
+  /// había uno (Ajustes > Bloqueo de la app, pedido por Pol el
+  /// 21/09/2026). El PIN se guarda solo como hash + sal aleatoria, nunca
+  /// en claro (ver `core/pin_hash.dart`).
+  Future<void> setAppLockPin(String pin) async {
+    await getAppSettings();
+    final salt = generatePinSalt();
+    await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
+      AppSettingsCompanion(
+        appLockEnabled: const Value(true),
+        appLockPinHash: Value(hashPin(pin, salt)),
+        appLockPinSalt: Value(salt),
+      ),
+    );
+  }
+
+  /// Desactiva el bloqueo y olvida el PIN guardado.
+  Future<void> disableAppLock() async {
+    await getAppSettings();
+    await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
+      const AppSettingsCompanion(
+        appLockEnabled: Value(false),
+        appLockPinHash: Value(null),
+        appLockPinSalt: Value(null),
+      ),
+    );
+  }
+
+  /// Comprueba un PIN introducido contra el hash guardado. `false` si el
+  /// bloqueo no está activado o todavía no hay ningún PIN guardado.
+  Future<bool> verifyAppLockPin(String pin) async {
+    final settings = await getAppSettings();
+    final hash = settings.appLockPinHash;
+    final salt = settings.appLockPinSalt;
+    if (hash == null || salt == null) return false;
+    return hashPin(pin, salt) == hash;
   }
 
   // ---------------------------------------------------------------------

@@ -3878,6 +3878,43 @@ class $AppSettingsTable extends AppSettings
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _appLockEnabledMeta = const VerificationMeta(
+    'appLockEnabled',
+  );
+  @override
+  late final GeneratedColumn<bool> appLockEnabled = GeneratedColumn<bool>(
+    'app_lock_enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("app_lock_enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _appLockPinHashMeta = const VerificationMeta(
+    'appLockPinHash',
+  );
+  @override
+  late final GeneratedColumn<String> appLockPinHash = GeneratedColumn<String>(
+    'app_lock_pin_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _appLockPinSaltMeta = const VerificationMeta(
+    'appLockPinSalt',
+  );
+  @override
+  late final GeneratedColumn<String> appLockPinSalt = GeneratedColumn<String>(
+    'app_lock_pin_salt',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3886,6 +3923,9 @@ class $AppSettingsTable extends AppSettings
     dismissedTreatSweepYearMonth,
     monthStartDay,
     hasSeenTutorial,
+    appLockEnabled,
+    appLockPinHash,
+    appLockPinSalt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3947,6 +3987,33 @@ class $AppSettingsTable extends AppSettings
         ),
       );
     }
+    if (data.containsKey('app_lock_enabled')) {
+      context.handle(
+        _appLockEnabledMeta,
+        appLockEnabled.isAcceptableOrUnknown(
+          data['app_lock_enabled']!,
+          _appLockEnabledMeta,
+        ),
+      );
+    }
+    if (data.containsKey('app_lock_pin_hash')) {
+      context.handle(
+        _appLockPinHashMeta,
+        appLockPinHash.isAcceptableOrUnknown(
+          data['app_lock_pin_hash']!,
+          _appLockPinHashMeta,
+        ),
+      );
+    }
+    if (data.containsKey('app_lock_pin_salt')) {
+      context.handle(
+        _appLockPinSaltMeta,
+        appLockPinSalt.isAcceptableOrUnknown(
+          data['app_lock_pin_salt']!,
+          _appLockPinSaltMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3980,6 +4047,18 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.bool,
         data['${effectivePrefix}has_seen_tutorial'],
       )!,
+      appLockEnabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}app_lock_enabled'],
+      )!,
+      appLockPinHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_lock_pin_hash'],
+      ),
+      appLockPinSalt: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}app_lock_pin_salt'],
+      ),
     );
   }
 
@@ -4026,6 +4105,15 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
   /// "Saltar tutorial" (las dos cuentan como "ya visto", para no volver a
   /// insistir). "Ajustes > Repetir tutorial" lo pone de nuevo a false.
   final bool hasSeenTutorial;
+
+  /// Bloqueo opcional de la app con PIN (con huella/cara como atajo si el
+  /// móvil lo soporta) -- Ajustes > Bloqueo de la app, pedido por Pol el
+  /// 21/09/2026. Por defecto desactivado. El PIN nunca se guarda en
+  /// claro: solo su hash (`appLockPinHash`) junto con la sal aleatoria
+  /// usada para calcularlo (`appLockPinSalt`), ver `core/pin_hash.dart`.
+  final bool appLockEnabled;
+  final String? appLockPinHash;
+  final String? appLockPinSalt;
   const AppSettingsRow({
     required this.id,
     this.defaultTreatRate,
@@ -4033,6 +4121,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     this.dismissedTreatSweepYearMonth,
     this.monthStartDay,
     required this.hasSeenTutorial,
+    required this.appLockEnabled,
+    this.appLockPinHash,
+    this.appLockPinSalt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -4051,6 +4142,13 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       map['month_start_day'] = Variable<int>(monthStartDay);
     }
     map['has_seen_tutorial'] = Variable<bool>(hasSeenTutorial);
+    map['app_lock_enabled'] = Variable<bool>(appLockEnabled);
+    if (!nullToAbsent || appLockPinHash != null) {
+      map['app_lock_pin_hash'] = Variable<String>(appLockPinHash);
+    }
+    if (!nullToAbsent || appLockPinSalt != null) {
+      map['app_lock_pin_salt'] = Variable<String>(appLockPinSalt);
+    }
     return map;
   }
 
@@ -4069,6 +4167,13 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
           ? const Value.absent()
           : Value(monthStartDay),
       hasSeenTutorial: Value(hasSeenTutorial),
+      appLockEnabled: Value(appLockEnabled),
+      appLockPinHash: appLockPinHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appLockPinHash),
+      appLockPinSalt: appLockPinSalt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(appLockPinSalt),
     );
   }
 
@@ -4086,6 +4191,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       ),
       monthStartDay: serializer.fromJson<int?>(json['monthStartDay']),
       hasSeenTutorial: serializer.fromJson<bool>(json['hasSeenTutorial']),
+      appLockEnabled: serializer.fromJson<bool>(json['appLockEnabled']),
+      appLockPinHash: serializer.fromJson<String?>(json['appLockPinHash']),
+      appLockPinSalt: serializer.fromJson<String?>(json['appLockPinSalt']),
     );
   }
   @override
@@ -4100,6 +4208,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       ),
       'monthStartDay': serializer.toJson<int?>(monthStartDay),
       'hasSeenTutorial': serializer.toJson<bool>(hasSeenTutorial),
+      'appLockEnabled': serializer.toJson<bool>(appLockEnabled),
+      'appLockPinHash': serializer.toJson<String?>(appLockPinHash),
+      'appLockPinSalt': serializer.toJson<String?>(appLockPinSalt),
     };
   }
 
@@ -4110,6 +4221,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     Value<String?> dismissedTreatSweepYearMonth = const Value.absent(),
     Value<int?> monthStartDay = const Value.absent(),
     bool? hasSeenTutorial,
+    bool? appLockEnabled,
+    Value<String?> appLockPinHash = const Value.absent(),
+    Value<String?> appLockPinSalt = const Value.absent(),
   }) => AppSettingsRow(
     id: id ?? this.id,
     defaultTreatRate: defaultTreatRate.present
@@ -4123,6 +4237,13 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
         ? monthStartDay.value
         : this.monthStartDay,
     hasSeenTutorial: hasSeenTutorial ?? this.hasSeenTutorial,
+    appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+    appLockPinHash: appLockPinHash.present
+        ? appLockPinHash.value
+        : this.appLockPinHash,
+    appLockPinSalt: appLockPinSalt.present
+        ? appLockPinSalt.value
+        : this.appLockPinSalt,
   );
   AppSettingsRow copyWithCompanion(AppSettingsCompanion data) {
     return AppSettingsRow(
@@ -4142,6 +4263,15 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
       hasSeenTutorial: data.hasSeenTutorial.present
           ? data.hasSeenTutorial.value
           : this.hasSeenTutorial,
+      appLockEnabled: data.appLockEnabled.present
+          ? data.appLockEnabled.value
+          : this.appLockEnabled,
+      appLockPinHash: data.appLockPinHash.present
+          ? data.appLockPinHash.value
+          : this.appLockPinHash,
+      appLockPinSalt: data.appLockPinSalt.present
+          ? data.appLockPinSalt.value
+          : this.appLockPinSalt,
     );
   }
 
@@ -4155,7 +4285,10 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
             'dismissedTreatSweepYearMonth: $dismissedTreatSweepYearMonth, ',
           )
           ..write('monthStartDay: $monthStartDay, ')
-          ..write('hasSeenTutorial: $hasSeenTutorial')
+          ..write('hasSeenTutorial: $hasSeenTutorial, ')
+          ..write('appLockEnabled: $appLockEnabled, ')
+          ..write('appLockPinHash: $appLockPinHash, ')
+          ..write('appLockPinSalt: $appLockPinSalt')
           ..write(')'))
         .toString();
   }
@@ -4168,6 +4301,9 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
     dismissedTreatSweepYearMonth,
     monthStartDay,
     hasSeenTutorial,
+    appLockEnabled,
+    appLockPinHash,
+    appLockPinSalt,
   );
   @override
   bool operator ==(Object other) =>
@@ -4179,7 +4315,10 @@ class AppSettingsRow extends DataClass implements Insertable<AppSettingsRow> {
           other.dismissedTreatSweepYearMonth ==
               this.dismissedTreatSweepYearMonth &&
           other.monthStartDay == this.monthStartDay &&
-          other.hasSeenTutorial == this.hasSeenTutorial);
+          other.hasSeenTutorial == this.hasSeenTutorial &&
+          other.appLockEnabled == this.appLockEnabled &&
+          other.appLockPinHash == this.appLockPinHash &&
+          other.appLockPinSalt == this.appLockPinSalt);
 }
 
 class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
@@ -4189,6 +4328,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
   final Value<String?> dismissedTreatSweepYearMonth;
   final Value<int?> monthStartDay;
   final Value<bool> hasSeenTutorial;
+  final Value<bool> appLockEnabled;
+  final Value<String?> appLockPinHash;
+  final Value<String?> appLockPinSalt;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
     this.defaultTreatRate = const Value.absent(),
@@ -4196,6 +4338,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     this.dismissedTreatSweepYearMonth = const Value.absent(),
     this.monthStartDay = const Value.absent(),
     this.hasSeenTutorial = const Value.absent(),
+    this.appLockEnabled = const Value.absent(),
+    this.appLockPinHash = const Value.absent(),
+    this.appLockPinSalt = const Value.absent(),
   });
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
@@ -4204,6 +4349,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     this.dismissedTreatSweepYearMonth = const Value.absent(),
     this.monthStartDay = const Value.absent(),
     this.hasSeenTutorial = const Value.absent(),
+    this.appLockEnabled = const Value.absent(),
+    this.appLockPinHash = const Value.absent(),
+    this.appLockPinSalt = const Value.absent(),
   });
   static Insertable<AppSettingsRow> custom({
     Expression<int>? id,
@@ -4212,6 +4360,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     Expression<String>? dismissedTreatSweepYearMonth,
     Expression<int>? monthStartDay,
     Expression<bool>? hasSeenTutorial,
+    Expression<bool>? appLockEnabled,
+    Expression<String>? appLockPinHash,
+    Expression<String>? appLockPinSalt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -4222,6 +4373,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
         'dismissed_treat_sweep_year_month': dismissedTreatSweepYearMonth,
       if (monthStartDay != null) 'month_start_day': monthStartDay,
       if (hasSeenTutorial != null) 'has_seen_tutorial': hasSeenTutorial,
+      if (appLockEnabled != null) 'app_lock_enabled': appLockEnabled,
+      if (appLockPinHash != null) 'app_lock_pin_hash': appLockPinHash,
+      if (appLockPinSalt != null) 'app_lock_pin_salt': appLockPinSalt,
     });
   }
 
@@ -4232,6 +4386,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     Value<String?>? dismissedTreatSweepYearMonth,
     Value<int?>? monthStartDay,
     Value<bool>? hasSeenTutorial,
+    Value<bool>? appLockEnabled,
+    Value<String?>? appLockPinHash,
+    Value<String?>? appLockPinSalt,
   }) {
     return AppSettingsCompanion(
       id: id ?? this.id,
@@ -4241,6 +4398,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
           dismissedTreatSweepYearMonth ?? this.dismissedTreatSweepYearMonth,
       monthStartDay: monthStartDay ?? this.monthStartDay,
       hasSeenTutorial: hasSeenTutorial ?? this.hasSeenTutorial,
+      appLockEnabled: appLockEnabled ?? this.appLockEnabled,
+      appLockPinHash: appLockPinHash ?? this.appLockPinHash,
+      appLockPinSalt: appLockPinSalt ?? this.appLockPinSalt,
     );
   }
 
@@ -4267,6 +4427,15 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
     if (hasSeenTutorial.present) {
       map['has_seen_tutorial'] = Variable<bool>(hasSeenTutorial.value);
     }
+    if (appLockEnabled.present) {
+      map['app_lock_enabled'] = Variable<bool>(appLockEnabled.value);
+    }
+    if (appLockPinHash.present) {
+      map['app_lock_pin_hash'] = Variable<String>(appLockPinHash.value);
+    }
+    if (appLockPinSalt.present) {
+      map['app_lock_pin_salt'] = Variable<String>(appLockPinSalt.value);
+    }
     return map;
   }
 
@@ -4280,7 +4449,10 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingsRow> {
             'dismissedTreatSweepYearMonth: $dismissedTreatSweepYearMonth, ',
           )
           ..write('monthStartDay: $monthStartDay, ')
-          ..write('hasSeenTutorial: $hasSeenTutorial')
+          ..write('hasSeenTutorial: $hasSeenTutorial, ')
+          ..write('appLockEnabled: $appLockEnabled, ')
+          ..write('appLockPinHash: $appLockPinHash, ')
+          ..write('appLockPinSalt: $appLockPinSalt')
           ..write(')'))
         .toString();
   }
@@ -7450,6 +7622,9 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<String?> dismissedTreatSweepYearMonth,
       Value<int?> monthStartDay,
       Value<bool> hasSeenTutorial,
+      Value<bool> appLockEnabled,
+      Value<String?> appLockPinHash,
+      Value<String?> appLockPinSalt,
     });
 typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
@@ -7459,6 +7634,9 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<String?> dismissedTreatSweepYearMonth,
       Value<int?> monthStartDay,
       Value<bool> hasSeenTutorial,
+      Value<bool> appLockEnabled,
+      Value<String?> appLockPinHash,
+      Value<String?> appLockPinSalt,
     });
 
 class $$AppSettingsTableFilterComposer
@@ -7497,6 +7675,21 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<bool> get hasSeenTutorial => $composableBuilder(
     column: $table.hasSeenTutorial,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get appLockEnabled => $composableBuilder(
+    column: $table.appLockEnabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appLockPinHash => $composableBuilder(
+    column: $table.appLockPinHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get appLockPinSalt => $composableBuilder(
+    column: $table.appLockPinSalt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -7540,6 +7733,21 @@ class $$AppSettingsTableOrderingComposer
     column: $table.hasSeenTutorial,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get appLockEnabled => $composableBuilder(
+    column: $table.appLockEnabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appLockPinHash => $composableBuilder(
+    column: $table.appLockPinHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get appLockPinSalt => $composableBuilder(
+    column: $table.appLockPinSalt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AppSettingsTableAnnotationComposer
@@ -7577,6 +7785,21 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<bool> get hasSeenTutorial => $composableBuilder(
     column: $table.hasSeenTutorial,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get appLockEnabled => $composableBuilder(
+    column: $table.appLockEnabled,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get appLockPinHash => $composableBuilder(
+    column: $table.appLockPinHash,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get appLockPinSalt => $composableBuilder(
+    column: $table.appLockPinSalt,
     builder: (column) => column,
   );
 }
@@ -7619,6 +7842,9 @@ class $$AppSettingsTableTableManager
                     const Value.absent(),
                 Value<int?> monthStartDay = const Value.absent(),
                 Value<bool> hasSeenTutorial = const Value.absent(),
+                Value<bool> appLockEnabled = const Value.absent(),
+                Value<String?> appLockPinHash = const Value.absent(),
+                Value<String?> appLockPinSalt = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
                 defaultTreatRate: defaultTreatRate,
@@ -7626,6 +7852,9 @@ class $$AppSettingsTableTableManager
                 dismissedTreatSweepYearMonth: dismissedTreatSweepYearMonth,
                 monthStartDay: monthStartDay,
                 hasSeenTutorial: hasSeenTutorial,
+                appLockEnabled: appLockEnabled,
+                appLockPinHash: appLockPinHash,
+                appLockPinSalt: appLockPinSalt,
               ),
           createCompanionCallback:
               ({
@@ -7636,6 +7865,9 @@ class $$AppSettingsTableTableManager
                     const Value.absent(),
                 Value<int?> monthStartDay = const Value.absent(),
                 Value<bool> hasSeenTutorial = const Value.absent(),
+                Value<bool> appLockEnabled = const Value.absent(),
+                Value<String?> appLockPinHash = const Value.absent(),
+                Value<String?> appLockPinSalt = const Value.absent(),
               }) => AppSettingsCompanion.insert(
                 id: id,
                 defaultTreatRate: defaultTreatRate,
@@ -7643,6 +7875,9 @@ class $$AppSettingsTableTableManager
                 dismissedTreatSweepYearMonth: dismissedTreatSweepYearMonth,
                 monthStartDay: monthStartDay,
                 hasSeenTutorial: hasSeenTutorial,
+                appLockEnabled: appLockEnabled,
+                appLockPinHash: appLockPinHash,
+                appLockPinSalt: appLockPinSalt,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
