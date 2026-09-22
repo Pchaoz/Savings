@@ -26,7 +26,7 @@ class PocketsScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
       ),
-      builder: (_) => const _AddPocketSheet(),
+      builder: (_) => const PocketFormSheet(),
     );
   }
 
@@ -138,16 +138,29 @@ class _PocketCard extends StatelessWidget {
   }
 }
 
-class _AddPocketSheet extends ConsumerStatefulWidget {
-  const _AddPocketSheet();
+/// Formulario de alta Y edicion de una hucha -- mismo formulario en los
+/// dos casos, precargado con nombre/meta de [existing] cuando se abre
+/// para editar (pedido por Pol el 22/09/2026, roadmap punto 20). El
+/// saldo nunca se toca aqui: eso solo cambia metiendo/sacando dinero de
+/// verdad desde el detalle de la hucha. Publica (sin `_`) a proposito:
+/// `pocket_detail_screen.dart` tambien la usa, para editar desde el
+/// icono de lapiz en el detalle.
+class PocketFormSheet extends ConsumerStatefulWidget {
+  const PocketFormSheet({super.key, this.existing});
+
+  final PocketRow? existing;
 
   @override
-  ConsumerState<_AddPocketSheet> createState() => _AddPocketSheetState();
+  ConsumerState<PocketFormSheet> createState() => _PocketFormSheetState();
 }
 
-class _AddPocketSheetState extends ConsumerState<_AddPocketSheet> {
-  final _nameController = TextEditingController();
-  final _targetController = TextEditingController();
+class _PocketFormSheetState extends ConsumerState<PocketFormSheet> {
+  late final _nameController = TextEditingController(text: widget.existing?.name ?? '');
+  late final _targetController = TextEditingController(
+    text: widget.existing?.targetCents == null
+        ? ''
+        : formatCentsPlain(widget.existing!.targetCents!),
+  );
   bool _saving = false;
 
   @override
@@ -172,10 +185,19 @@ class _AddPocketSheetState extends ConsumerState<_AddPocketSheet> {
     if (!_canSave) return;
     setState(() => _saving = true);
 
-    await ref.read(repositoryProvider).addPocket(
-          name: _nameController.text.trim(),
-          targetCents: _parseEuros(_targetController.text),
-        );
+    final existing = widget.existing;
+    if (existing == null) {
+      await ref.read(repositoryProvider).addPocket(
+            name: _nameController.text.trim(),
+            targetCents: _parseEuros(_targetController.text),
+          );
+    } else {
+      await ref.read(repositoryProvider).updatePocket(
+            id: existing.id,
+            name: _nameController.text.trim(),
+            targetCents: _parseEuros(_targetController.text),
+          );
+    }
     ref.invalidate(pocketsProvider);
     ref.invalidate(pocketBalancesProvider);
 
@@ -197,7 +219,7 @@ class _AddPocketSheetState extends ConsumerState<_AddPocketSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('NUEVA HUCHA', style: T.eyebrow),
+            Text(widget.existing == null ? 'NUEVA HUCHA' : 'EDITAR HUCHA', style: T.eyebrow),
             const SizedBox(height: 16),
             Text('Nombre', style: T.meta),
             TextField(

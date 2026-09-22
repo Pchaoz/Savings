@@ -35,6 +35,30 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: '1.8',
+    date: '24/09/2026',
+    changes: [
+      'Nuevo buscador de movimientos (icono de lupa en Movimientos): '
+          'busca por texto de la nota en todo el historial, no solo en '
+          'el mes que estas mirando, y agrupa los resultados por mes.',
+      'La bolsa de caprichos disponible en Inicio ahora descuenta los '
+          'gastos fijos recurrentes de este mes que todavia no han '
+          'llegado a su dia (p. ej. una suscripcion del dia 22 vista '
+          'desde el dia 15), para no dar por libre un dinero que en '
+          'realidad ya esta comprometido -- con una linea debajo '
+          'explicando cuanto se ha reservado.',
+      'Ahora se pueden editar los recurrentes (nomina, suscripciones...) '
+          'y las huchas de ahorro (nombre y meta) sin tener que '
+          'borrarlos y crearlos de nuevo.',
+      'En Evolucion del ahorro, debajo de la linea de ahorro acumulado '
+          'ahora hay un grafico con el cambio de cada mes respecto al '
+          'anterior, con el importe de cada mes escrito junto a su punto '
+          '(azul si ganaste mas, rojo si ganaste menos o perdiste), con '
+          'dos tarjetas nuevas para ver de un vistazo cual fue tu mejor y '
+          'tu peor mes.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.7.2',
     date: '21/09/2026',
     changes: [

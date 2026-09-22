@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/money.dart';
 import '../core/theme/tokens.dart';
 import '../data/database.dart';
+import 'pockets_screen.dart';
 import 'providers.dart';
 
 const _monthNames = [
@@ -59,6 +60,20 @@ class PocketDetailScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
       ),
       builder: (_) => _AddPocketRecurringSheet(pocketId: pocketId),
+    );
+  }
+
+  /// Editar nombre/meta (pedido por Pol el 22/09/2026, roadmap punto 20)
+  /// -- mismo formulario de alta de `pockets_screen.dart`, precargado.
+  Future<void> _openEditSheet(BuildContext context, PocketRow pocket) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
+      ),
+      builder: (_) => PocketFormSheet(existing: pocket),
     );
   }
 
@@ -113,10 +128,20 @@ class PocketDetailScreen extends ConsumerWidget {
             data: (pockets) {
               final pocket = _findPocket(pockets, pocketId);
               if (pocket == null) return const SizedBox.shrink();
-              return IconButton(
-                icon: const Icon(Icons.delete_outline),
-                tooltip: 'Eliminar hucha',
-                onPressed: () => _confirmDelete(context, ref, pocket),
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Editar hucha',
+                    onPressed: () => _openEditSheet(context, pocket),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Eliminar hucha',
+                    onPressed: () => _confirmDelete(context, ref, pocket),
+                  ),
+                ],
               );
             },
             orElse: () => const SizedBox.shrink(),

@@ -27,6 +27,17 @@ String formatCentsSigned(int cents) {
   return cents > 0 ? '+$body' : '−$body';
 }
 
+final _eurCompact = NumberFormat.currency(locale: 'es_ES', symbol: '€', decimalDigits: 0);
+
+/// Version compacta de `formatCentsSigned`, redondeada al euro mas
+/// cercano: para sitios donde no cabe el detalle a centimos, como las
+/// etiquetas junto a cada punto de un grafico. `111719` -> `"+1.117 €"`
+String formatCentsSignedCompact(int cents) {
+  final body = _eurCompact.format(cents.abs() / 100);
+  if (cents == 0) return body;
+  return cents > 0 ? '+$body' : '−$body';
+}
+
 /// Acumulador para el teclado numerico de "Nuevo gasto".
 ///
 /// Funciona como el de una calculadora de caja: los digitos entran por la

@@ -425,11 +425,14 @@ class SavingsRepository {
     return (yearMonths.toList()..sort()).first;
   }
 
-  /// Movimientos de [yearMonth] ("2026-08"), mas recientes primero, cada
-  /// uno con su categoria y su devolucion enlazada (en cualquier sentido)
-  /// si la tiene, aunque esa devolucion caiga en otro mes.
-  Future<List<MovementView>> movementsFor(String yearMonth) async {
-    final monthStartDay = (await getAppSettings()).monthStartDay ?? 1;
+  /// Trae todos los movimientos no borrados con su categoria ya unida y
+  /// sus devoluciones enlazadas (en cualquier sentido), filtrados por
+  /// [where] y ordenados de mas reciente a mas antiguo -- logica comun
+  /// entre [movementsFor] (un mes) y [searchMovements] (todo el
+  /// historial), para no mantener el enlazado de devoluciones dos veces.
+  Future<List<MovementView>> _movementViews(
+    bool Function(TransactionRow tx, CategoryRow cat) where,
+  ) async {
     final rows = await (_db.select(_db.transactions)
           ..where((t) => t.deletedAt.isNull()))
         .join([
@@ -447,11 +450,11 @@ class SavingsRepository {
         if (tx.refundOfId != null) tx.refundOfId!: tx,
     };
 
-    final inMonth = all.where((e) => yearMonthOf(e.$1.date, monthStartDay) == yearMonth).toList()
+    final matches = all.where((e) => where(e.$1, e.$2)).toList()
       ..sort((a, b) => b.$1.date.compareTo(a.$1.date));
 
     return [
-      for (final (tx, cat) in inMonth)
+      for (final (tx, cat) in matches)
         MovementView(
           transaction: tx,
           category: cat,
@@ -459,6 +462,34 @@ class SavingsRepository {
           refundedBy: refundByOriginalId[tx.id],
         ),
     ];
+  }
+
+  /// Movimientos de [yearMonth] ("2026-08"), mas recientes primero, cada
+  /// uno con su categoria y su devolucion enlazada (en cualquier sentido)
+  /// si la tiene, aunque esa devolucion caiga en otro mes.
+  Future<List<MovementView>> movementsFor(String yearMonth) async {
+    final monthStartDay = (await getAppSettings()).monthStartDay ?? 1;
+    return _movementViews((tx, _) => yearMonthOf(tx.date, monthStartDay) == yearMonth);
+  }
+
+  /// Buscador de movimientos por texto de la nota (Movimientos, icono de
+  /// lupa, pedido por Pol el 22/09/2026): mira TODO el historial, no solo
+  /// el mes seleccionado ("para eso sirve buscar, no tener que ir mes a
+  /// mes a mano"), sin distinguir mayusculas de minusculas (`contains`
+  /// simple, sin libreria de normalizacion -- de sobra para notas
+  /// cortas). Solo compara contra el texto real de `Transactions.note`,
+  /// tal y como lo pidio Pol ("por texto de la nota") -- un movimiento
+  /// sin nota (que en la lista cae al nombre de la categoria) nunca
+  /// aparece en los resultados. `query` en blanco devuelve la lista
+  /// vacia sin tocar la base de datos.
+  Future<List<MovementView>> searchMovements(String query) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return [];
+
+    return _movementViews((tx, _) {
+      final note = tx.note;
+      return note != null && note.toLowerCase().contains(needle);
+    });
   }
 
   /// [movementsFor] agrupado por categoria y sumado, de mayor a menor
@@ -609,6 +640,34 @@ class SavingsRepository {
     return (_db.delete(_db.recurringTemplates)..where((r) => r.id.equals(id))).go();
   }
 
+  /// Corrige una plantilla ya existente (pedido por Pol el 22/09/2026,
+  /// roadmap punto 20: "poder editar sin borrar"). A proposito NO toca
+  /// ningun movimiento ya generado este mes -- el cambio solo se nota en
+  /// lo que `generateRecurringForMonth` genere de aqui en adelante. Si
+  /// hace falta corregir el importe de este mes en concreto (p. ej. una
+  /// nomina variable), eso ya se hace editando ese movimiento desde
+  /// Movimientos, sin tocar la plantilla.
+  Future<void> updateRecurringTemplate({
+    required int id,
+    required String name,
+    required int categoryId,
+    required int amountCents,
+    required int dayOfMonth,
+    required int everyNMonths,
+    required String anchorYearMonth,
+  }) {
+    return (_db.update(_db.recurringTemplates)..where((r) => r.id.equals(id))).write(
+      RecurringTemplatesCompanion(
+        name: Value(name),
+        categoryId: Value(categoryId),
+        amountCents: Value(amountCents),
+        dayOfMonth: Value(dayOfMonth),
+        everyNMonths: Value(everyNMonths),
+        anchorYearMonth: Value(anchorYearMonth),
+      ),
+    );
+  }
+
   /// Genera los movimientos de las plantillas activas que tocan
   /// [yearMonth], si todavia no se han generado. Mismo patron perezoso que
   /// `purgeExpiredTrash`: se llama cada vez que se pide el mes (ver
@@ -713,16 +772,13 @@ class SavingsRepository {
         if (generatedIds.contains(tpl.id)) continue;
         if (!_isRecurringDue(tpl, yearMonth)) continue;
 
-        final anchorIndex = anchorIndexById[tpl.id]!;
-        DateTime? date;
-        for (final (y, m) in candidateMonths) {
-          if (y * 12 + m < anchorIndex) continue;
-          final candidate = DateTime(y, m, tpl.dayOfMonth);
-          if (!candidate.isBefore(cycleStart) && candidate.isBefore(cycleEnd)) {
-            date = candidate;
-            break;
-          }
-        }
+        final date = _dueDateInCycle(
+          tpl.dayOfMonth,
+          anchorIndexById[tpl.id]!,
+          candidateMonths,
+          cycleStart,
+          cycleEnd,
+        );
         if (date == null) continue;
         if (date.isAfter(today)) continue;
 
@@ -745,6 +801,92 @@ class SavingsRepository {
   bool _isRecurringDue(RecurringRow tpl, String yearMonth) {
     final diff = _monthIndex(yearMonth) - _monthIndex(tpl.anchorYearMonth);
     return diff >= 0 && diff % tpl.everyNMonths == 0;
+  }
+
+  /// La fecha exacta que le toca a un [dayOfMonth] dentro del ciclo
+  /// [cycleStart]-[cycleEnd] (fin excluido), probando los meses de
+  /// calendario candidatos de ese ciclo ([candidateMonths], ver
+  /// `_cycleRangeFor`) y sin aceptar nunca un candidato anterior al mes
+  /// ancla de la plantilla ([anchorIndex]) -- null si ninguno de los
+  /// meses candidatos cae dentro del ciclo. Compartido entre
+  /// `generateRecurringForMonth` (genera un movimiento real si la fecha
+  /// ya paso) y `pendingFixedExpensesCents` (cuenta el importe si la
+  /// fecha TODAVIA no ha pasado), para no mantener este calculo de
+  /// fechas escrito dos veces.
+  DateTime? _dueDateInCycle(
+    int dayOfMonth,
+    int anchorIndex,
+    Set<(int, int)> candidateMonths,
+    DateTime cycleStart,
+    DateTime cycleEnd,
+  ) {
+    for (final (y, m) in candidateMonths) {
+      if (y * 12 + m < anchorIndex) continue;
+      final candidate = DateTime(y, m, dayOfMonth);
+      if (!candidate.isBefore(cycleStart) && candidate.isBefore(cycleEnd)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  /// Suma de los gastos fijos recurrentes de [yearMonth] que TODAVIA no
+  /// se han generado como `Transactions` real porque su dia no ha
+  /// llegado (pedido por Pol el 22/09/2026, ver "Reservar gastos fijos
+  /// pendientes" en el resumen del proyecto): el mismo calculo que decide
+  /// si `generateRecurringForMonth` genera un movimiento (plantilla
+  /// activa, categoria de gasto fijo, ancla ya alcanzada, dia dentro del
+  /// ciclo), pero al reves -- solo cuenta lo que TODAVIA queda por
+  /// delante, sin generar ningun movimiento real (eso reintroduciria el
+  /// mismo bug del 01/09/2026, esta vez del lado del gasto en vez del
+  /// ingreso). Pensado solo para el mes en curso -- para cualquier otro
+  /// mes "pendiente" no significa nada, asi que quien llama debe
+  /// comprobar eso antes de usarlo (ver `pendingFixedExpensesProvider`).
+  Future<int> pendingFixedExpensesCents(String yearMonth) async {
+    final monthStartDay = (await getAppSettings()).monthStartDay ?? 1;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final allTemplates = await _db.select(_db.recurringTemplates).get();
+    final categoriesById = {
+      for (final c in await _db.select(_db.categories).get()) c.id: c,
+    };
+
+    final generated = await (_db.select(_db.transactions)
+          ..where((t) => t.recurringTemplateId.isNotNull() & t.deletedAt.isNull()))
+        .get();
+    final generatedTemplateIdsThisMonth = {
+      for (final tx in generated)
+        if (yearMonthOf(tx.date, monthStartDay) == yearMonth) tx.recurringTemplateId!,
+    };
+
+    final (cycleStart, cycleEnd) = _cycleRangeFor(yearMonth, monthStartDay);
+    final cycleEndInclusive = cycleEnd.subtract(const Duration(days: 1));
+    final candidateMonths = <(int, int)>{
+      (cycleStart.year, cycleStart.month),
+      (cycleEndInclusive.year, cycleEndInclusive.month),
+    };
+
+    var total = 0;
+    for (final tpl in allTemplates) {
+      if (!tpl.active) continue;
+      if (generatedTemplateIdsThisMonth.contains(tpl.id)) continue;
+      if (categoriesById[tpl.categoryId]?.kind != CategoryKindDb.fixed) continue;
+      if (!_isRecurringDue(tpl, yearMonth)) continue;
+
+      final date = _dueDateInCycle(
+        tpl.dayOfMonth,
+        _monthIndex(tpl.anchorYearMonth),
+        candidateMonths,
+        cycleStart,
+        cycleEnd,
+      );
+      if (date == null) continue;
+      if (!date.isAfter(today)) continue;
+
+      total += tpl.amountCents;
+    }
+    return total;
   }
 
   /// "2026-08" -> un entero que crece de mes en mes (año*12+mes), para
@@ -840,6 +982,24 @@ class SavingsRepository {
   /// arriba). Al borrar la hucha, ese dinero simplemente deja de estar
   /// apartado; si "Ahorro total incluye huchas" estaba desactivado, ese
   /// importe pasa a contar de nuevo como disponible en Inicio.
+  /// Corrige el nombre y/o la meta de una hucha ya existente (pedido por
+  /// Pol el 22/09/2026, roadmap punto 20). El saldo nunca se toca desde
+  /// aqui -- eso solo cambia metiendo/sacando dinero de verdad
+  /// (`addPocketMovement`), nunca editando la fila de la hucha. Pasar
+  /// `targetCents: null` borra la meta (vuelve a ser una hucha sin meta).
+  Future<void> updatePocket({
+    required int id,
+    required String name,
+    int? targetCents,
+  }) {
+    return (_db.update(_db.savingsPockets)..where((p) => p.id.equals(id))).write(
+      SavingsPocketsCompanion(
+        name: Value(name),
+        targetCents: Value(targetCents),
+      ),
+    );
+  }
+
   Future<void> deletePocket(int id) async {
     await (_db.delete(_db.pocketMovements)..where((m) => m.pocketId.equals(id))).go();
     await (_db.delete(_db.pocketRecurringTemplates)..where((r) => r.pocketId.equals(id))).go();

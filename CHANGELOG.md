@@ -7,6 +7,28 @@ novedades se numera "X.Y" (p. ej. "1.6") y un arreglo sobre esa misma
 entrega se numera "X.Y.Z" (p. ej. "1.6.1") -- antes siempre se veían
 tres números más el número de build (p. ej. "1.6.0+7").
 
+## [1.8] - 2026-09-24
+
+### Añadido
+- Buscador de movimientos: un icono de lupa en Movimientos abre una
+  barra de búsqueda que busca por texto de la nota en todo el
+  historial (no solo en el mes que estás mirando), con los resultados
+  agrupados por mes, del más reciente al más antiguo.
+- La bolsa de caprichos disponible en Inicio ahora descuenta los
+  gastos fijos recurrentes de este mes que todavía no han llegado a su
+  día (por ejemplo, una suscripción del día 22 vista desde el día 15),
+  para no dar por libre un dinero que en realidad ya está comprometido
+  — con una línea debajo explicando cuánto se ha reservado.
+- Ahora se pueden editar los recurrentes (nómina, suscripciones...) y
+  las huchas de ahorro (nombre y meta) sin tener que borrarlos y
+  crearlos de nuevo.
+- En Evolución del ahorro, debajo de la línea de ahorro acumulado
+  ahora hay un gráfico con el cambio de cada mes respecto al
+  anterior, con el importe de cada mes escrito junto a su punto
+  (azul si ganaste más, rojo si ganaste menos o perdiste), con dos
+  tarjetas nuevas para ver de un vistazo cuál fue tu mejor y tu peor
+  mes.
+
 ## [1.7.2] - 2026-09-21
 
 ### Añadido

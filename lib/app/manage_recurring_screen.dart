@@ -56,7 +56,19 @@ class ManageRecurringScreen extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
       ),
-      builder: (_) => const _AddRecurringSheet(),
+      builder: (_) => const _RecurringFormSheet(),
+    );
+  }
+
+  Future<void> _openEditSheet(BuildContext context, RecurringRow tpl) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: C.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
+      ),
+      builder: (_) => _RecurringFormSheet(existing: tpl),
     );
   }
 
@@ -97,6 +109,7 @@ class ManageRecurringScreen extends ConsumerWidget {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.autorenew, color: C.calm),
+                    onTap: () => _openEditSheet(context, tpl),
                     title: Text(tpl.name, style: T.body),
                     subtitle: Text(
                       '$catName · ${_periodLabel(tpl.everyNMonths)} · día ${tpl.dayOfMonth} · '
@@ -137,25 +150,44 @@ class ManageRecurringScreen extends ConsumerWidget {
   }
 }
 
-class _AddRecurringSheet extends ConsumerStatefulWidget {
-  const _AddRecurringSheet();
+/// Formulario de alta Y edicion de una plantilla recurrente -- mismo
+/// formulario en los dos casos, precargado con los datos de [existing]
+/// cuando se abre para editar (pedido por Pol el 22/09/2026, roadmap
+/// punto 20: poder corregir nombre/importe/categoria/periodicidad/dia sin
+/// tener que borrar y volver a crear). Editar NUNCA toca un movimiento ya
+/// generado este mes -- solo cambia lo que se genere a partir de ahora
+/// (ver `SavingsRepository.updateRecurringTemplate`).
+class _RecurringFormSheet extends ConsumerStatefulWidget {
+  const _RecurringFormSheet({this.existing});
+
+  final RecurringRow? existing;
 
   @override
-  ConsumerState<_AddRecurringSheet> createState() => _AddRecurringSheetState();
+  ConsumerState<_RecurringFormSheet> createState() => _RecurringFormSheetState();
 }
 
-class _AddRecurringSheetState extends ConsumerState<_AddRecurringSheet> {
-  final _nameController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _dayController = TextEditingController(text: '1');
+class _RecurringFormSheetState extends ConsumerState<_RecurringFormSheet> {
+  late final _nameController = TextEditingController(text: widget.existing?.name ?? '');
+  late final _amountController = TextEditingController(
+    text: widget.existing == null ? '' : formatCentsPlain(widget.existing!.amountCents),
+  );
+  late final _dayController =
+      TextEditingController(text: (widget.existing?.dayOfMonth ?? 1).toString());
   CategoryRow? _selectedCategory;
-  int _everyNMonths = 1;
+  late int _everyNMonths = widget.existing?.everyNMonths ?? 1;
   // Mes desde el que empieza a tocar (doc 04: la T-Jove no se cobra
   // todos los meses, asi que no basta con "el mes en que se crea la
   // plantilla" — Pol tiene que poder decir "a partir de octubre").
-  int _anchorYear = DateTime.now().year;
-  int _anchorMonth = DateTime.now().month;
+  late int _anchorYear = _initialAnchor.$1;
+  late int _anchorMonth = _initialAnchor.$2;
   bool _saving = false;
+
+  (int, int) get _initialAnchor {
+    final anchor = widget.existing?.anchorYearMonth;
+    if (anchor == null) return (DateTime.now().year, DateTime.now().month);
+    final parts = anchor.split('-');
+    return (int.parse(parts[0]), int.parse(parts[1]));
+  }
 
   void _shiftAnchor(int delta) {
     setState(() {
@@ -204,15 +236,28 @@ class _AddRecurringSheetState extends ConsumerState<_AddRecurringSheet> {
 
     final anchor =
         '${_anchorYear.toString().padLeft(4, '0')}-${_anchorMonth.toString().padLeft(2, '0')}';
+    final existing = widget.existing;
 
-    await ref.read(repositoryProvider).addRecurringTemplate(
-          name: _nameController.text.trim(),
-          categoryId: category.id,
-          amountCents: cents,
-          dayOfMonth: day,
-          everyNMonths: _everyNMonths,
-          anchorYearMonth: anchor,
-        );
+    if (existing == null) {
+      await ref.read(repositoryProvider).addRecurringTemplate(
+            name: _nameController.text.trim(),
+            categoryId: category.id,
+            amountCents: cents,
+            dayOfMonth: day,
+            everyNMonths: _everyNMonths,
+            anchorYearMonth: anchor,
+          );
+    } else {
+      await ref.read(repositoryProvider).updateRecurringTemplate(
+            id: existing.id,
+            name: _nameController.text.trim(),
+            categoryId: category.id,
+            amountCents: cents,
+            dayOfMonth: day,
+            everyNMonths: _everyNMonths,
+            anchorYearMonth: anchor,
+          );
+    }
     ref.invalidate(recurringTemplatesProvider);
     ref.invalidate(monthResultProvider);
     ref.invalidate(monthMovementsProvider);
@@ -240,7 +285,7 @@ class _AddRecurringSheetState extends ConsumerState<_AddRecurringSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('NUEVO RECURRENTE', style: T.eyebrow),
+            Text(widget.existing == null ? 'NUEVO RECURRENTE' : 'EDITAR RECURRENTE', style: T.eyebrow),
             const SizedBox(height: 16),
             Text('Nombre', style: T.meta),
             TextField(
@@ -267,6 +312,18 @@ class _AddRecurringSheetState extends ConsumerState<_AddRecurringSheet> {
               // sentido como plantilla recurrente.
               data: (cats) {
                 final options = cats.where((c) => c.kind != CategoryKindDb.treat).toList();
+                // Al editar, preseleccionamos la categoria de la
+                // plantilla en cuanto llega la lista -- sin `setState`,
+                // ya que este `build` todavia no ha terminado de montar
+                // el `Wrap` que lee `_selectedCategory` mas abajo.
+                if (_selectedCategory == null && widget.existing != null) {
+                  for (final cat in options) {
+                    if (cat.id == widget.existing!.categoryId) {
+                      _selectedCategory = cat;
+                      break;
+                    }
+                  }
+                }
                 return Wrap(
                   spacing: 8,
                   runSpacing: 8,

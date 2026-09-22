@@ -17,6 +17,17 @@
 /// solo sitio "de donde sale tanto el ahorro como el gasto". Vive aquí en
 /// vez de en una pantalla aparte a propósito: esto ya es "el apartado de
 /// ver de dónde sale el dinero", no hacía falta uno nuevo.
+///
+/// **30/09/2026**: debajo de la línea, un gráfico de cambio mes a mes
+/// con el cambio de cada mes respecto al anterior (azul si se ganó más,
+/// rojo si se ganó menos o se perdió) -- pedido por Pol para poder
+/// comparar de un vistazo entre meses, algo que la línea del acumulado
+/// no deja ver bien (una pendiente suave y una bajada real se parecen
+/// demasiado). Debajo del gráfico, dos tarjetas con el mejor y el peor
+/// mes del periodo mostrado. Empezó siendo un gráfico de barras; el mismo
+/// día Pol pidió cambiarlo por una línea "más visual", con el importe
+/// de cada mes escrito junto a su punto y en orden cronológico -- ver
+/// `_MonthlyChangePainter` más abajo.
 library;
 
 import 'dart:ui' as ui;
@@ -65,11 +76,22 @@ class SavingsChartScreen extends ConsumerWidget {
             List<int> balances = [];
             int change = 0;
             int minBal = 0, maxBal = 0;
+            List<int> changes = [];
+            List<String> changeMonths = [];
+            var bestChangeIdx = 0, worstChangeIdx = 0;
             if (hasEnoughHistory) {
               balances = [for (final (_, r) in points) r.closingBalanceCents];
               change = balances.last - balances.first;
               minBal = balances.reduce((a, b) => a < b ? a : b);
               maxBal = balances.reduce((a, b) => a > b ? a : b);
+              for (var i = 1; i < balances.length; i++) {
+                changes.add(balances[i] - balances[i - 1]);
+                changeMonths.add(points[i].$1);
+              }
+              for (var i = 1; i < changes.length; i++) {
+                if (changes[i] > changes[bestChangeIdx]) bestChangeIdx = i;
+                if (changes[i] < changes[worstChangeIdx]) worstChangeIdx = i;
+              }
             }
 
             return ListView(
@@ -134,6 +156,62 @@ class SavingsChartScreen extends ConsumerWidget {
                       Expanded(child: _StatTile(label: 'MÁXIMO', value: maxBal)),
                     ],
                   ),
+                  const SizedBox(height: 20),
+                  Text('CAMBIO MES A MES', style: T.eyebrow),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
+                    decoration: BoxDecoration(
+                      color: C.surface,
+                      borderRadius: BorderRadius.circular(R.container),
+                    ),
+                    child: Column(
+                      children: [
+                        SizedBox(
+                          height: 150,
+                          child: CustomPaint(
+                            size: Size.infinite,
+                            painter: _MonthlyChangePainter(changes),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: changeMonths.length > 1
+                              ? Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(_formatYearMonth(changeMonths.first), style: T.meta),
+                                    Text(_formatYearMonth(changeMonths.last), style: T.meta),
+                                  ],
+                                )
+                              : Center(
+                                  child: Text(_formatYearMonth(changeMonths.first), style: T.meta),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ChangeStatTile(
+                          label: 'MEJOR MES',
+                          yearMonth: changeMonths[bestChangeIdx],
+                          value: changes[bestChangeIdx],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _ChangeStatTile(
+                          label: 'PEOR MES',
+                          yearMonth: changeMonths[worstChangeIdx],
+                          value: changes[worstChangeIdx],
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
                 const SizedBox(height: 24),
                 Text(
@@ -171,6 +249,40 @@ class _StatTile extends StatelessWidget {
           Text(label, style: T.eyebrow),
           const SizedBox(height: 6),
           Text(formatCents(value), style: T.amountLarge.copyWith(color: C.calm)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChangeStatTile extends StatelessWidget {
+  const _ChangeStatTile({
+    required this.label,
+    required this.yearMonth,
+    required this.value,
+  });
+
+  final String label;
+  final String yearMonth;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = value >= 0 ? C.calm : C.spend;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(R.container),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: T.eyebrow),
+          const SizedBox(height: 6),
+          Text(formatCentsSigned(value), style: T.amountLarge.copyWith(color: color)),
+          const SizedBox(height: 2),
+          Text(_formatYearMonth(yearMonth), style: T.meta),
         ],
       ),
     );
@@ -413,4 +525,108 @@ class _EvolutionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _EvolutionPainter oldDelegate) => true;
+}
+
+/// Línea divergente desde un eje en cero: el cambio de cada mes respecto
+/// al anterior (azul si se ganó más, rojo si se ganó menos o se
+/// perdió), con el importe (redondeado al euro, `formatCentsSignedCompact`
+/// -- a céntimos no cabría junto al punto) escrito encima o debajo de
+/// cada punto, según el signo. Empezó siendo un gráfico de barras
+/// (30/09/2026); el mismo día Pol pidió cambiarlo por esto -- "más
+/// visual", con números y en orden cronológico (los puntos ya venían en
+/// orden porque `changeMonths` se construye recorriendo el historial de
+/// más antiguo a más reciente).
+///
+/// Recibe ya los cambios calculados (un elemento menos que meses de
+/// historial, porque el primer mes no tiene con qué compararse) y
+/// reparte los puntos a lo ancho de su propio espacio -- a propósito NO
+/// comparte escala con `_EvolutionPainter` de arriba (mismo motivo que en
+/// la versión de barras: con poco historial dejaba huecos y etiquetas
+/// mal alineadas). La línea que conecta los puntos es de un color
+/// neutro a propósito: el signo de cada mes ya lo dice el punto y su
+/// etiqueta, ponerlo también en el trazo (con un degradado por tramo)
+/// solo añadiría ruido.
+class _MonthlyChangePainter extends CustomPainter {
+  _MonthlyChangePainter(this.changes);
+
+  final List<int> changes;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (changes.isEmpty || size.width <= 0 || size.height <= 0) return;
+
+    final maxAbs = changes.map((c) => c.abs()).reduce((a, b) => a > b ? a : b);
+    if (maxAbs == 0) return;
+
+    const labelGap = 4.0;
+    const labelClearance = 28.0; // aire para la etiqueta de texto de cada punto
+    final zeroY = size.height / 2;
+    final halfHeight = size.height / 2 - labelClearance;
+
+    // Un punto solo va centrado; con dos o más, se reparten a lo ancho
+    // con el mismo aire a los lados que entre ellos (igual que la
+    // versión de barras).
+    final slotWidth = size.width / changes.length;
+    double xAt(int i) => slotWidth * (i + 0.5);
+    double yAt(int i) => zeroY - (changes[i] / maxAbs) * halfHeight;
+
+    canvas.drawLine(
+      Offset(0, zeroY),
+      Offset(size.width, zeroY),
+      Paint()
+        ..color = C.line
+        ..strokeWidth = 1,
+    );
+
+    if (changes.length > 1) {
+      final linePath = ui.Path()..moveTo(xAt(0), yAt(0));
+      for (var i = 1; i < changes.length; i++) {
+        linePath.lineTo(xAt(i), yAt(i));
+      }
+      canvas.drawPath(
+        linePath,
+        Paint()
+          ..color = C.inkDim
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    for (var i = 0; i < changes.length; i++) {
+      final monthChange = changes[i];
+      final x = xAt(i);
+      final y = yAt(i);
+      final color = monthChange >= 0 ? C.calm : C.spend;
+
+      canvas.drawCircle(Offset(x, y), 4, Paint()..color = C.surface);
+      canvas.drawCircle(
+        Offset(x, y),
+        4,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      canvas.drawCircle(Offset(x, y), 1.8, Paint()..color = color);
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: formatCentsSignedCompact(monthChange),
+          style: T.meta.copyWith(color: color, fontWeight: FontWeight.w600),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final labelX = (x - label.width / 2).clamp(0.0, size.width - label.width);
+      final labelY = monthChange >= 0
+          ? y - 4 - labelGap - label.height
+          : y + 4 + labelGap;
+      label.paint(canvas, Offset(labelX, labelY));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MonthlyChangePainter oldDelegate) => true;
 }

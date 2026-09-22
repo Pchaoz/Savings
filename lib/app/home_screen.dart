@@ -56,19 +56,27 @@ class HomeScreen extends ConsumerWidget {
     final isCurrentMonth = selectedYearMonth ==
         currentYearMonth(monthStartDay: appSettings?.monthStartDay ?? 1);
     final monthResult = ref.watch(monthResultProvider(selectedYearMonth));
+    // Solo tiene sentido "lo que aun no ha llegado" mirando el mes en
+    // curso -- ver `pendingFixedExpensesProvider`.
+    final pendingFixedExpenses =
+        isCurrentMonth ? ref.watch(pendingFixedExpensesProvider).value ?? 0 : 0;
     // Widget de pantalla de inicio (bolsa de caprichos disponible): solo
     // se manda al lado nativo cuando se esta mirando el mes en curso (un
     // mes pasado no representa "lo que tienes disponible ahora"), y solo
     // cuando el dato cambia de verdad -- `ref.listen` no dispara en cada
     // rebuild, a diferencia de llamarlo a mano dentro del `.when(data: ...)`.
+    // Se resta lo reservado (ver arriba), igual que en la tarjeta de
+    // Inicio, para que el widget y la app enseñen siempre el mismo numero.
     ref.listen<AsyncValue<MonthResult>>(monthResultProvider(selectedYearMonth), (previous, next) {
       if (!isCurrentMonth) return;
       final result = next.value;
       if (result == null) return;
+      final displayClosing = result.bagClosingCents - pendingFixedExpenses;
+      final displayAvailable = result.bagAvailableCents - pendingFixedExpenses;
       TreatWidgetBridge.updateAmount(
-        amountText: formatCents(result.bagClosingCents),
-        overspent: result.bagClosingCents < 0,
-        spentRatio: result.bagSpentRatio,
+        amountText: formatCents(displayClosing),
+        overspent: displayClosing < 0,
+        spentRatio: displayAvailable <= 0 ? 1.0 : result.bagSpentCents / displayAvailable,
       );
     });
     final showPocketsInTotal = appSettings?.showPocketsInTotal ?? true;
@@ -235,7 +243,11 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  _TreatBagCard(key: _treatBagCardKey, result: r),
+                  _TreatBagCard(
+                    key: _treatBagCardKey,
+                    result: r,
+                    reservedCents: pendingFixedExpenses,
+                  ),
                   const SizedBox(height: 16),
                   Text('Patrimonio total: ${formatCents(r.netWorthCents)}', style: T.meta),
                   const SizedBox(height: 20),
@@ -297,14 +309,24 @@ class HomeScreen extends ConsumerWidget {
 /// ahora no se usaba. Muestra el importe grande de siempre más, debajo,
 /// una barra de cuánto llevas gastado del presupuesto disponible.
 class _TreatBagCard extends StatelessWidget {
-  const _TreatBagCard({super.key, required this.result});
+  const _TreatBagCard({super.key, required this.result, this.reservedCents = 0});
 
   final MonthResult result;
 
+  /// Gastos fijos recurrentes de este mes que aun no han llegado a su dia
+  /// (ver `pendingFixedExpensesProvider`) -- se resta aqui, solo para lo
+  /// que se MUESTRA, sin tocar `result` (el motor sigue calculando con
+  /// dinero real de verdad). 0 en cualquier mes que no sea el actual.
+  final int reservedCents;
+
   @override
   Widget build(BuildContext context) {
-    final ratio = result.bagSpentRatio.clamp(0.0, 1.0);
-    final overspent = result.bagClosingCents < 0;
+    final displayClosing = result.bagClosingCents - reservedCents;
+    final displayAvailable = result.bagAvailableCents - reservedCents;
+    final ratio = displayAvailable <= 0
+        ? 1.0
+        : (result.bagSpentCents / displayAvailable).clamp(0.0, 1.0);
+    final overspent = displayClosing < 0;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
@@ -318,7 +340,7 @@ class _TreatBagCard extends StatelessWidget {
           const Text('A CAPRICHOS', style: T.eyebrow),
           const SizedBox(height: 4),
           Text(
-            formatCents(result.bagClosingCents),
+            formatCents(displayClosing),
             key: const Key('bagAmount'),
             style: T.hero.copyWith(color: overspent ? C.spend : C.go),
           ),
@@ -335,9 +357,16 @@ class _TreatBagCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Gastado ${formatCents(result.bagSpentCents)} de '
-            '${formatCents(result.bagAvailableCents)} disponibles',
+            '${formatCents(displayAvailable)} disponibles',
             style: T.meta,
           ),
+          if (reservedCents > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Reservado por gastos fijos pendientes: ${formatCents(reservedCents)}',
+              style: T.meta,
+            ),
+          ],
         ],
       ),
     );

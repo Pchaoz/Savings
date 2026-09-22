@@ -57,47 +57,94 @@ String _formatYearMonth(String yearMonth) {
   return '${_monthNames[month - 1]} ${parts[0]}';
 }
 
-class MovementsScreen extends ConsumerWidget {
+class MovementsScreen extends ConsumerStatefulWidget {
   const MovementsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MovementsScreen> createState() => _MovementsScreenState();
+}
+
+/// Icono de lupa en la AppBar (pedido por Pol el 22/09/2026: buscador de
+/// movimientos por texto de la nota). `ConsumerStatefulWidget` en vez de
+/// `ConsumerWidget` solo porque hace falta un `TextEditingController` --
+/// el texto de busqueda en si vive en `movementSearchQueryProvider`
+/// (`app/providers.dart`), no en este estado local.
+class _MovementsScreenState extends ConsumerState<MovementsScreen> {
+  final _searchController = TextEditingController();
+  bool _searching = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _startSearching() => setState(() => _searching = true);
+
+  void _stopSearching() {
+    _searchController.clear();
+    ref.read(movementSearchQueryProvider.notifier).clear();
+    setState(() => _searching = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedYearMonth = ref.watch(selectedYearMonthProvider);
-    final movementsAsync = ref.watch(monthMovementsProvider(selectedYearMonth));
     final hiddenIds = ref.watch(removedMovementIdsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Movimientos · ${_formatYearMonth(selectedYearMonth)}')),
+      appBar: AppBar(
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                style: T.body,
+                decoration: const InputDecoration(
+                  hintText: 'Buscar en las notas...',
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) => ref.read(movementSearchQueryProvider.notifier).set(value),
+              )
+            : Text('Movimientos · ${_formatYearMonth(selectedYearMonth)}'),
+        actions: [
+          IconButton(
+            icon: Icon(_searching ? Icons.close : Icons.search),
+            onPressed: _searching ? _stopSearching : _startSearching,
+          ),
+        ],
+      ),
       body: SafeArea(
         top: false,
-        child: movementsAsync.when(
-          data: (movements) {
-            // Ver nota en removedMovementIdsProvider: esto oculta al
-            // instante lo que acabamos de borrar, sin esperar a que este
-            // FutureProvider se recalcule.
-            final visible =
-                movements.where((m) => !hiddenIds.contains(m.transaction.id)).toList();
+        child: _searching
+            ? const _SearchResults()
+            : ref.watch(monthMovementsProvider(selectedYearMonth)).when(
+                data: (movements) {
+                  // Ver nota en removedMovementIdsProvider: esto oculta al
+                  // instante lo que acabamos de borrar, sin esperar a que
+                  // este FutureProvider se recalcule.
+                  final visible =
+                      movements.where((m) => !hiddenIds.contains(m.transaction.id)).toList();
 
-            if (visible.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'Todavía no hay movimientos en ${_formatYearMonth(selectedYearMonth)}.',
-                    style: T.body,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              );
-            }
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-              children: _rows(visible),
-            );
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e', style: T.body)),
-        ),
+                  if (visible.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Todavía no hay movimientos en ${_formatYearMonth(selectedYearMonth)}.',
+                          style: T.body,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    children: _rows(visible),
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e', style: T.body)),
+              ),
       ),
     );
   }
@@ -116,6 +163,93 @@ class MovementsScreen extends ConsumerWidget {
       widgets.add(_MovementTile(movement: m));
     }
     return widgets;
+  }
+}
+
+/// Resultados del buscador, en TODO el historial (no solo el mes
+/// seleccionado -- ver `movementSearchResultsProvider`), agrupados por
+/// mes con la fecha de cada uno bien visible (pedido por Pol: "agrupados
+/// por mes, mas reciente primero"). Vacio (con una pista) mientras no se
+/// haya escrito nada todavia, para no lanzar una busqueda con texto en
+/// blanco.
+class _SearchResults extends ConsumerWidget {
+  const _SearchResults();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final query = ref.watch(movementSearchQueryProvider);
+    if (query.trim().isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Escribe algo para buscar en las notas de tus movimientos.',
+            style: T.body,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final resultsAsync = ref.watch(movementSearchResultsProvider);
+    final settingsAsync = ref.watch(appSettingsProvider);
+
+    return resultsAsync.when(
+      data: (results) {
+        if (results.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Ningún movimiento con "$query" en la nota.',
+                style: T.body,
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+        final monthStartDay = settingsAsync.value?.monthStartDay ?? 1;
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: _groupedByMonth(results, monthStartDay),
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e', style: T.body)),
+    );
+  }
+
+  List<Widget> _groupedByMonth(List<MovementView> results, int monthStartDay) {
+    final widgets = <Widget>[];
+    String? lastYearMonth;
+
+    for (final m in results) {
+      final yearMonth = SavingsRepository.yearMonthOf(m.transaction.date, monthStartDay);
+      if (lastYearMonth == null || yearMonth != lastYearMonth) {
+        widgets.add(_MonthSeparator(yearMonth: yearMonth));
+        lastYearMonth = yearMonth;
+      }
+      widgets.add(_SearchResultTile(movement: m));
+    }
+    return widgets;
+  }
+}
+
+class _MonthSeparator extends StatelessWidget {
+  const _MonthSeparator({required this.yearMonth});
+
+  final String yearMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 18, bottom: 4),
+      padding: const EdgeInsets.only(bottom: 8),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: C.line)),
+      ),
+      child: Text(_formatYearMonth(yearMonth).toUpperCase(), style: T.eyebrow),
+    );
   }
 }
 
@@ -143,6 +277,82 @@ class _DaySeparator extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Icono + titulo/subtitulo + importe de una fila de movimiento --
+/// compartido entre `_MovementTile` (Movimientos normal, con gestos de
+/// editar/eliminar) y `_SearchResultTile` (resultados del buscador, solo
+/// lectura), para no mantener el mismo dibujado dos veces. `dateLabel`
+/// se antepone al subtitulo solo cuando lo pasa quien llama (el buscador
+/// puede mezclar movimientos de dias distintos dentro del mismo grupo de
+/// mes; Movimientos normal ya tiene sus propios separadores por dia y no
+/// lo necesita).
+Widget _movementRowContent(WidgetRef ref, MovementView movement, {String? dateLabel}) {
+  final tx = movement.transaction;
+  final cat = movement.category;
+
+  // Para ingresos, positivo en la base de datos = dinero que entra.
+  // Para todo lo demas, positivo = gasto (se ve como negativo en la
+  // lista) y negativo = devolucion (se ve como positivo).
+  final displayCents = cat.kind == CategoryKindDb.income ? tx.amountCents : -tx.amountCents;
+
+  final title = (tx.note != null && tx.note!.trim().isNotEmpty) ? tx.note!.trim() : cat.name;
+  final wasRefunded = movement.hasBeenRefunded;
+  final subtitle = dateLabel != null
+      ? '$dateLabel · ${_subtitleFor(ref, movement, cat)}'
+      : _subtitleFor(ref, movement, cat);
+
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: C.surface,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          _iconFor(cat.icon),
+          size: 17,
+          color: wasRefunded ? C.inkFaint : C.ink,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: T.body.copyWith(color: wasRefunded ? C.inkDim : C.ink),
+                  ),
+                ),
+                if (wasRefunded) ...[
+                  const SizedBox(width: 6),
+                  const _Tag(label: 'DEVUELTO'),
+                ],
+              ],
+            ),
+            Text(subtitle, style: T.meta),
+          ],
+        ),
+      ),
+      Text(
+        formatCentsSigned(displayCents),
+        style: T.amount.copyWith(
+          color: displayCents < 0 ? C.spend : C.ink,
+          decoration: wasRefunded ? TextDecoration.lineThrough : null,
+          decorationColor: C.inkFaint,
+        ),
+      ),
+    ],
+  );
 }
 
 class _MovementTile extends ConsumerWidget {
@@ -236,67 +446,8 @@ class _MovementTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tx = movement.transaction;
-    final cat = movement.category;
-
-    // Para ingresos, positivo en la base de datos = dinero que entra.
-    // Para todo lo demas, positivo = gasto (se ve como negativo en la
-    // lista) y negativo = devolucion (se ve como positivo).
-    final displayCents = cat.kind == CategoryKindDb.income ? tx.amountCents : -tx.amountCents;
-
-    final title = (tx.note != null && tx.note!.trim().isNotEmpty) ? tx.note!.trim() : cat.name;
     final wasRefunded = movement.hasBeenRefunded;
-
-    final row = Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: C.surface,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            _iconFor(cat.icon),
-            size: 17,
-            color: wasRefunded ? C.inkFaint : C.ink,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: T.body.copyWith(color: wasRefunded ? C.inkDim : C.ink),
-                    ),
-                  ),
-                  if (wasRefunded) ...[
-                    const SizedBox(width: 6),
-                    const _Tag(label: 'DEVUELTO'),
-                  ],
-                ],
-              ),
-              Text(_subtitleFor(ref, movement, cat), style: T.meta),
-            ],
-          ),
-        ),
-        Text(
-          formatCentsSigned(displayCents),
-          style: T.amount.copyWith(
-            color: displayCents < 0 ? C.spend : C.ink,
-            decoration: wasRefunded ? TextDecoration.lineThrough : null,
-            decorationColor: C.inkFaint,
-          ),
-        ),
-      ],
-    );
+    final row = _movementRowContent(ref, movement);
 
     // Las devoluciones van sangradas, para leerse como colgadas de su
     // compra en vez de como un movimiento suelto (doc 08).
@@ -355,6 +506,38 @@ class _MovementTile extends ConsumerWidget {
       },
       onDismissed: (_) => _handleDismissed(context, ref, pendingDeleteReason ?? 'other'),
       child: tile,
+    );
+  }
+}
+
+/// Fila de un resultado del buscador -- misma presentacion que
+/// `_MovementTile` pero sin gestos de deslizar (no tiene sentido borrar o
+/// devolver desde una lista que puede mezclar movimientos de dias y
+/// meses distintos); tocarla abre editar, igual que deslizar a la
+/// derecha en Movimientos normal.
+class _SearchResultTile extends ConsumerWidget {
+  const _SearchResultTile({required this.movement});
+
+  final MovementView movement;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final date = movement.transaction.date;
+    final dateLabel = '${date.day} ${_monthNames[date.month - 1]}';
+    final row = _movementRowContent(ref, movement, dateLabel: dateLabel);
+
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => EditMovementScreen(movement: movement)),
+        );
+      },
+      child: Padding(
+        padding: movement.isRefund
+            ? const EdgeInsets.only(left: 30, top: 2, bottom: 10)
+            : const EdgeInsets.symmetric(vertical: 8),
+        child: row,
+      ),
     );
   }
 }

@@ -54,6 +54,34 @@ final monthMovementsProvider =
   return repo.movementsFor(yearMonth);
 });
 
+/// Texto de busqueda actual en Movimientos (icono de lupa en la AppBar,
+/// pedido por Pol el 22/09/2026). Vive aparte de `selectedYearMonthProvider`
+/// porque buscar no cambia de mes: mientras hay texto de busqueda,
+/// Movimientos deja de mostrar el mes seleccionado y enseña resultados de
+/// TODO el historial agrupados por mes (ver `movementSearchResultsProvider`).
+class MovementSearchQuery extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void set(String value) => state = value;
+
+  void clear() => state = '';
+}
+
+final movementSearchQueryProvider = NotifierProvider<MovementSearchQuery, String>(
+  MovementSearchQuery.new,
+);
+
+/// Resultados de `movementSearchQueryProvider`, por texto de la nota en
+/// todo el historial (no solo el mes seleccionado -- ver
+/// `SavingsRepository.searchMovements`). Vacio mientras no haya texto de
+/// busqueda, sin tocar la base de datos para nada (mismo `searchMovements`
+/// que ya corta antes de consultar si `query` esta en blanco).
+final movementSearchResultsProvider = FutureProvider<List<MovementView>>((ref) {
+  final query = ref.watch(movementSearchQueryProvider);
+  return ref.watch(repositoryProvider).searchMovements(query);
+});
+
 /// Resumen por categoria de [yearMonth] (ingresos y gastos, dentro de
 /// Evolución del ahorro), mismo patron perezoso que
 /// `monthMovementsProvider`: genera antes los recurrentes de ese mes (y los
@@ -347,6 +375,23 @@ final pendingTreatSweepProvider = FutureProvider<(int, String, bool)?>((ref) asy
 
   final pockets = await ref.watch(pocketsProvider.future);
   return (available, _shiftYearMonth(today, -1), pockets.isNotEmpty);
+});
+
+/// Cuanto de la bolsa de caprichos del mes en curso esta en realidad ya
+/// comprometido por gastos fijos recurrentes que todavia no han llegado
+/// a su dia (pedido por Pol el 22/09/2026, ver "Reservar gastos fijos
+/// pendientes" en el resumen del proyecto): una suscripcion del dia 22
+/// vista desde el dia 15 es un gasto practicamente seguro, aunque
+/// `generateRecurringForMonth` todavia no la haya generado como
+/// `Transactions` real. Inicio resta esto de la bolsa MOSTRADA (no del
+/// calculo real del motor, que sigue viendo solo dinero que ya paso de
+/// verdad) para no dar por libre un margen que en la practica ya esta
+/// comprometido. Solo tiene sentido para el mes en curso -- Inicio solo
+/// lo aplica mirando ese mes.
+final pendingFixedExpensesProvider = FutureProvider<int>((ref) async {
+  final settings = await ref.watch(appSettingsProvider.future);
+  final today = currentYearMonth(monthStartDay: settings.monthStartDay ?? 1);
+  return ref.watch(repositoryProvider).pendingFixedExpensesCents(today);
 });
 
 // ---------------------------------------------------------------------
