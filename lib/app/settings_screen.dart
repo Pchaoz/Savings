@@ -375,6 +375,7 @@ class SettingsScreen extends ConsumerWidget {
           settingsAsync.when(
             data: (settings) {
               final ratePercent = ((settings.defaultTreatRate ?? kDefaultTreatRate) * 100).round();
+              final remainingCents = ref.watch(treatSweepRemainingCentsProvider).value ?? 0;
               return Column(
                 children: [
                   ListTile(
@@ -406,6 +407,20 @@ class SettingsScreen extends ConsumerWidget {
                       ref.invalidate(monthResultProvider);
                     },
                   ),
+                  SwitchListTile(
+                    secondary: const Icon(Icons.swap_horiz),
+                    title: const Text('Evolución: % de sueldo utilizado'),
+                    subtitle: Text(
+                      settings.showUsageRateInsteadOfSavings
+                          ? 'Mostrando el % de sueldo utilizado cada mes'
+                          : 'Mostrando el % de ahorro cada mes (apágalo para ver el gastado)',
+                    ),
+                    value: settings.showUsageRateInsteadOfSavings,
+                    onChanged: (value) async {
+                      await ref.read(repositoryProvider).setShowUsageRateInsteadOfSavings(value);
+                      ref.invalidate(appSettingsProvider);
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.event_repeat),
                     title: const Text('Mes de nómina a nómina'),
@@ -424,10 +439,18 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: Text(
                       settings.dismissedTreatSweepYearMonth == null
                           ? 'No hay ningún aviso contestado todavía.'
-                          : 'Contestado para ${settings.dismissedTreatSweepYearMonth}. '
-                              'Tócalo para que Inicio lo vuelva a preguntar.',
+                          : remainingCents <= 0
+                              // Bug corregido el 08/10/2026: ya no se ofrece
+                              // dos veces el mismo dinero -- si ya se movio
+                              // del todo (ahorro general o hucha), este
+                              // boton se desactiva en vez de volver a
+                              // ofrecerlo.
+                              ? 'Contestado para ${settings.dismissedTreatSweepYearMonth} y ya '
+                                  'resuelto del todo -- no queda nada de aquel sobrante por mover.'
+                              : 'Contestado para ${settings.dismissedTreatSweepYearMonth}. '
+                                  'Tócalo para que Inicio lo vuelva a preguntar.',
                     ),
-                    enabled: settings.dismissedTreatSweepYearMonth != null,
+                    enabled: settings.dismissedTreatSweepYearMonth != null && remainingCents > 0,
                     onTap: () async {
                       await ref.read(repositoryProvider).resetTreatSweepPrompt();
                       ref.invalidate(appSettingsProvider);

@@ -43,7 +43,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -139,6 +139,36 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(appSettings, appSettings.appLockEnabled);
             await m.addColumn(appSettings, appSettings.appLockPinHash);
             await m.addColumn(appSettings, appSettings.appLockPinSalt);
+          }
+          // v11: "guardar el sobrante de caprichos en el ahorro general"
+          // (una de las tres opciones del aviso de sobrante, 08/10/2026)
+          // -- columna nullable que se SUMA al saldo heredado del mes
+          // anterior en vez de sustituirlo, para no romper la regla de
+          // "todo se recalcula siempre" si luego se corrige algo de un
+          // mes anterior. Ninguna fila existente pierde nada: por
+          // defecto queda null, que es "sin ningun ajuste".
+          if (from < 11) {
+            await m.addColumn(months, months.openingBalanceAdjustmentCents);
+          }
+          // v12: arreglo de "Volver a preguntar por el sobrante de
+          // caprichos" ofreciendo dos veces el mismo dinero (08/10/2026,
+          // ver comentario de Months.treatSweepResolvedCents en
+          // tables.dart). Nullable, por defecto null = "nada resuelto
+          // todavia", asi que ninguna fila existente cambia de
+          // comportamiento hasta la proxima vez que se mueva un
+          // sobrante.
+          if (from < 12) {
+            await m.addColumn(months, months.treatSweepResolvedCents);
+          }
+          // v13: interruptor global para elegir, en "Evolución del
+          // ahorro", si se muestra el % de sueldo utilizado cada mes en
+          // vez del % de ahorro (08/10 -> 27/10/2026, pedido por Pol:
+          // son complementarios, mejor uno u otro que los dos a la vez).
+          // Por defecto false = sigue viendose el % de ahorro de
+          // siempre, asi que ninguna instalacion existente cambia de
+          // pantalla sin que el usuario lo pida en Ajustes.
+          if (from < 13) {
+            await m.addColumn(appSettings, appSettings.showUsageRateInsteadOfSavings);
           }
         },
       );

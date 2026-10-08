@@ -111,6 +111,30 @@ class Months extends Table {
   /// El resto de meses lo heredan calculado en cascada.
   IntColumn get openingBalanceCents => integer().nullable()();
 
+  /// Ajuste manual que se SUMA al saldo heredado del mes anterior (no lo
+  /// sustituye, a diferencia de [openingBalanceCents]) -- pensado para
+  /// "guardar el sobrante de caprichos en el ahorro general" (08/10/2026):
+  /// a diferencia de sobrescribir el saldo inicial, sumar aqui mantiene la
+  /// regla de oro de la app (todo se recalcula siempre) intacta -- si mas
+  /// adelante se corrige un movimiento de un mes anterior, el cambio se
+  /// sigue propagando bien, porque esto no fija un numero final, solo
+  /// anade algo encima de lo que sea que resulte ese mes.
+  IntColumn get openingBalanceAdjustmentCents => integer().nullable()();
+
+  /// Cuanto del sobrante de caprichos QUE ENTRO en este mes ya se ha
+  /// movido de verdad (ahorro general o hucha) -- bug encontrado el
+  /// 08/10/2026: sin esto, "Volver a preguntar por el sobrante" (Ajustes)
+  /// volvia a ofrecer la MISMA cantidad de siempre (el `bagOpeningCents`
+  /// de este mes nunca cambia, viene fijo del cierre del mes anterior),
+  /// asi que elegir una opcion otra vez volvia a mover el dinero por
+  /// segunda vez de verdad -- no era un duplicado por error, era la app
+  /// ofreciendo dos veces algo que ya estaba resuelto. `sweepTreatBagTo*`
+  /// suma aqui lo que de verdad mueve; lo que queda por resolver es
+  /// `min(bagOpeningCents, bagClosingCents) - treatSweepResolvedCents`.
+  /// "Acumular" NO suma aqui a proposito: no mueve nada, asi que no hay
+  /// riesgo de duplicar si se vuelve a preguntar despues de acumular.
+  IntColumn get treatSweepResolvedCents => integer().nullable()();
+
   @override
   Set<Column> get primaryKey => {yearMonth};
 }
@@ -243,6 +267,15 @@ class AppSettings extends Table {
   BoolColumn get appLockEnabled => boolean().withDefault(const Constant(false))();
   TextColumn get appLockPinHash => text().nullable()();
   TextColumn get appLockPinSalt => text().nullable()();
+
+  /// En "Evolución del ahorro", si se muestra el % de sueldo utilizado
+  /// cada mes (true) o el % de ahorro (false, por defecto) -- pedido por
+  /// Pol el 27/10/2026: son el complementario el uno del otro, así que
+  /// no tiene sentido enseñar los dos a la vez, mejor un interruptor
+  /// global (igual que "Ahorro total incluye huchas") que decide cuál se
+  /// ve en toda la app.
+  BoolColumn get showUsageRateInsteadOfSavings =>
+      boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column> get primaryKey => {id};

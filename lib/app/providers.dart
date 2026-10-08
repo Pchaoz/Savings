@@ -362,19 +362,43 @@ final pocketRecurringTemplatesProvider = FutureProvider<List<PocketRecurringRow>
 /// ofrecer mas de lo que de verdad sigue sin gastar ahora mismo, por si
 /// ya se ha apuntado algun capricho este mes antes de contestar al
 /// aviso.
-final pendingTreatSweepProvider = FutureProvider<(int, String, bool)?>((ref) async {
+/// Cuanto queda TODAVIA sin resolver del sobrante de caprichos que
+/// entro este mes -- independiente de si ya se contesto el aviso
+/// (`dismissedTreatSweepYearMonth`). **Bug corregido el 08/10/2026**:
+/// antes `pendingTreatSweepProvider` ofrecia siempre
+/// `min(bagOpeningCents, bagClosingCents)`, que es un numero fijo del
+/// cierre del mes anterior y NUNCA bajaba aunque ya se hubiera movido
+/// ese dinero de verdad -- asi que "Volver a preguntar" (Ajustes) lo
+/// volvia a ofrecer entero, y elegir una opcion otra vez lo movia por
+/// segunda vez. Ahora se resta `treatSweepResolvedCents` (lo que de
+/// verdad ya se movio, ver `tables.dart`), asi que una vez resuelto del
+/// todo esto da 0 y ya no hay nada que ofrecer, por mucho que se
+/// resetee el aviso.
+final treatSweepRemainingCentsProvider = FutureProvider<int>((ref) async {
   final settings = await ref.watch(appSettingsProvider.future);
   final today = currentYearMonth(monthStartDay: settings.monthStartDay ?? 1);
-  if (settings.dismissedTreatSweepYearMonth == today) return null;
 
   final result = await ref.watch(monthResultProvider(today).future);
   final available = result.bagOpeningCents < result.bagClosingCents
       ? result.bagOpeningCents
       : result.bagClosingCents;
-  if (available <= 0) return null;
+  if (available <= 0) return 0;
+
+  final resolved = await ref.watch(repositoryProvider).treatSweepResolvedCentsFor(today);
+  final remaining = available - resolved;
+  return remaining <= 0 ? 0 : remaining;
+});
+
+final pendingTreatSweepProvider = FutureProvider<(int, String, bool)?>((ref) async {
+  final settings = await ref.watch(appSettingsProvider.future);
+  final today = currentYearMonth(monthStartDay: settings.monthStartDay ?? 1);
+  if (settings.dismissedTreatSweepYearMonth == today) return null;
+
+  final remaining = await ref.watch(treatSweepRemainingCentsProvider.future);
+  if (remaining <= 0) return null;
 
   final pockets = await ref.watch(pocketsProvider.future);
-  return (available, _shiftYearMonth(today, -1), pockets.isNotEmpty);
+  return (remaining, _shiftYearMonth(today, -1), pockets.isNotEmpty);
 });
 
 /// Cuanto de la bolsa de caprichos del mes en curso esta en realidad ya

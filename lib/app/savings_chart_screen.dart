@@ -59,6 +59,11 @@ class SavingsChartScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = ref.watch(savingsHistoryProvider);
     final selectedYearMonth = ref.watch(selectedYearMonthProvider);
+    // Pedido por Pol el 27/10/2026: % de ahorro y % de sueldo utilizado
+    // son complementarios el uno del otro, asi que solo se enseña uno a
+    // la vez -- interruptor global en Ajustes (por defecto, % de ahorro).
+    final showUsageRate =
+        ref.watch(appSettingsProvider).value?.showUsageRateInsteadOfSavings ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Evolución del ahorro')),
@@ -79,6 +84,12 @@ class SavingsChartScreen extends ConsumerWidget {
             List<int> changes = [];
             List<String> changeMonths = [];
             var bestChangeIdx = 0, worstChangeIdx = 0;
+            List<double> savingsRates = [];
+            List<String> rateMonths = [];
+            var bestRateIdx = 0, worstRateIdx = 0;
+            List<double> usageRates = [];
+            List<String> usageMonths = [];
+            var mostUsedIdx = 0, leastUsedIdx = 0;
             if (hasEnoughHistory) {
               balances = [for (final (_, r) in points) r.closingBalanceCents];
               change = balances.last - balances.first;
@@ -91,6 +102,30 @@ class SavingsChartScreen extends ConsumerWidget {
               for (var i = 1; i < changes.length; i++) {
                 if (changes[i] > changes[bestChangeIdx]) bestChangeIdx = i;
                 if (changes[i] < changes[worstChangeIdx]) worstChangeIdx = i;
+              }
+              // % de ahorro de cada mes = ganado / ingresos (pedido por
+              // Pol el 08/10/2026) -- se salta cualquier mes sin ingresos
+              // registrados, para no dividir entre cero.
+              for (final (ym, r) in points) {
+                if (r.incomeCents == 0) continue;
+                savingsRates.add(r.savedCents / r.incomeCents * 100);
+                rateMonths.add(ym);
+              }
+              for (var i = 1; i < savingsRates.length; i++) {
+                if (savingsRates[i] > savingsRates[bestRateIdx]) bestRateIdx = i;
+                if (savingsRates[i] < savingsRates[worstRateIdx]) worstRateIdx = i;
+              }
+              // % de sueldo utilizado de cada mes = el complementario del
+              // % de ahorro (pedido por Pol el 27/10/2026): gastado =
+              // ingresos - ahorrado, sobre ingresos. Mismos meses que
+              // savingsRates (ya se salto cualquier mes sin ingresos), asi
+              // que es un simple "100 - %ahorro" mes a mes, sin tener que
+              // volver a mirar incomeCents/savedCents.
+              usageMonths = rateMonths;
+              usageRates = [for (final rate in savingsRates) 100 - rate];
+              for (var i = 1; i < usageRates.length; i++) {
+                if (usageRates[i] > usageRates[mostUsedIdx]) mostUsedIdx = i;
+                if (usageRates[i] < usageRates[leastUsedIdx]) leastUsedIdx = i;
               }
             }
 
@@ -212,6 +247,98 @@ class SavingsChartScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
+                  if (showUsageRate ? usageRates.isNotEmpty : savingsRates.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      showUsageRate
+                          ? '% DE SUELDO UTILIZADO CADA MES'
+                          : '% DE AHORRO CADA MES',
+                      style: T.eyebrow,
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(4, 12, 4, 12),
+                      decoration: BoxDecoration(
+                        color: C.surface,
+                        borderRadius: BorderRadius.circular(R.container),
+                      ),
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: 150,
+                            child: CustomPaint(
+                              size: Size.infinite,
+                              painter: showUsageRate
+                                  ? _UsageRatePainter(usageRates)
+                                  : _SavingsRatePainter(savingsRates),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: (showUsageRate ? usageMonths : rateMonths).length > 1
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatYearMonth(
+                                          (showUsageRate ? usageMonths : rateMonths).first,
+                                        ),
+                                        style: T.meta,
+                                      ),
+                                      Text(
+                                        _formatYearMonth(
+                                          (showUsageRate ? usageMonths : rateMonths).last,
+                                        ),
+                                        style: T.meta,
+                                      ),
+                                    ],
+                                  )
+                                : Center(
+                                    child: Text(
+                                      _formatYearMonth(
+                                        (showUsageRate ? usageMonths : rateMonths).first,
+                                      ),
+                                      style: T.meta,
+                                    ),
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: showUsageRate
+                              ? _UsageStatTile(
+                                  label: 'MÁS UTILIZADO',
+                                  yearMonth: usageMonths[mostUsedIdx],
+                                  value: usageRates[mostUsedIdx],
+                                )
+                              : _RateStatTile(
+                                  label: 'MÁS AHORRO',
+                                  yearMonth: rateMonths[bestRateIdx],
+                                  value: savingsRates[bestRateIdx],
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: showUsageRate
+                              ? _UsageStatTile(
+                                  label: 'MENOS UTILIZADO',
+                                  yearMonth: usageMonths[leastUsedIdx],
+                                  value: usageRates[leastUsedIdx],
+                                )
+                              : _RateStatTile(
+                                  label: 'MENOS AHORRO',
+                                  yearMonth: rateMonths[worstRateIdx],
+                                  value: savingsRates[worstRateIdx],
+                                ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 24),
                 Text(
@@ -281,6 +408,42 @@ class _ChangeStatTile extends StatelessWidget {
           Text(label, style: T.eyebrow),
           const SizedBox(height: 6),
           Text(formatCentsSigned(value), style: T.amountLarge.copyWith(color: color)),
+          const SizedBox(height: 2),
+          Text(_formatYearMonth(yearMonth), style: T.meta),
+        ],
+      ),
+    );
+  }
+}
+
+/// Igual que [_ChangeStatTile] pero para un porcentaje de ahorro en vez
+/// de un importe (ver "% DE AHORRO CADA MES", 08/10/2026).
+class _RateStatTile extends StatelessWidget {
+  const _RateStatTile({
+    required this.label,
+    required this.yearMonth,
+    required this.value,
+  });
+
+  final String label;
+  final String yearMonth;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = value >= 0 ? C.calm : C.spend;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(R.container),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: T.eyebrow),
+          const SizedBox(height: 6),
+          Text(_formatPercentSigned(value), style: T.amountLarge.copyWith(color: color)),
           const SizedBox(height: 2),
           Text(_formatYearMonth(yearMonth), style: T.meta),
         ],
@@ -629,4 +792,234 @@ class _MonthlyChangePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MonthlyChangePainter oldDelegate) => true;
+}
+
+/// Redondea al entero mas cercano y fuerza el signo, igual que
+/// `formatCentsSignedCompact` pero para un porcentaje en vez de dinero
+/// (ver "% DE AHORRO CADA MES", 08/10/2026). `18.4` -> `"+18 %"`,
+/// `-5.0` -> `"-5 %"`, `0.0` -> `"0 %"`.
+String _formatPercentSigned(double pct) {
+  final rounded = pct.round();
+  if (rounded == 0) return '0 %';
+  return rounded > 0 ? '+$rounded %' : '$rounded %';
+}
+
+/// Linea con puntos del % de ahorro de cada mes (ganado / ingresos,
+/// 08/10/2026) -- mismo estilo a mano que `_MonthlyChangePainter`, solo
+/// que aqui cada mes tiene su propio punto (no hace falta un mes
+/// anterior con el que compararse) y la etiqueta es un porcentaje en vez
+/// de un importe.
+class _SavingsRatePainter extends CustomPainter {
+  _SavingsRatePainter(this.rates);
+
+  final List<double> rates;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rates.isEmpty || size.width <= 0 || size.height <= 0) return;
+
+    final maxAbs = rates.map((r) => r.abs()).reduce((a, b) => a > b ? a : b);
+    if (maxAbs == 0) return;
+
+    const labelGap = 4.0;
+    const labelClearance = 28.0;
+    final zeroY = size.height / 2;
+    final halfHeight = size.height / 2 - labelClearance;
+
+    final slotWidth = size.width / rates.length;
+    double xAt(int i) => slotWidth * (i + 0.5);
+    double yAt(int i) => zeroY - (rates[i] / maxAbs) * halfHeight;
+
+    canvas.drawLine(
+      Offset(0, zeroY),
+      Offset(size.width, zeroY),
+      Paint()
+        ..color = C.line
+        ..strokeWidth = 1,
+    );
+
+    if (rates.length > 1) {
+      final linePath = ui.Path()..moveTo(xAt(0), yAt(0));
+      for (var i = 1; i < rates.length; i++) {
+        linePath.lineTo(xAt(i), yAt(i));
+      }
+      canvas.drawPath(
+        linePath,
+        Paint()
+          ..color = C.inkDim
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    for (var i = 0; i < rates.length; i++) {
+      final rate = rates[i];
+      final x = xAt(i);
+      final y = yAt(i);
+      final color = rate >= 0 ? C.calm : C.spend;
+
+      canvas.drawCircle(Offset(x, y), 4, Paint()..color = C.surface);
+      canvas.drawCircle(
+        Offset(x, y),
+        4,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      canvas.drawCircle(Offset(x, y), 1.8, Paint()..color = color);
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: _formatPercentSigned(rate),
+          style: T.meta.copyWith(color: color, fontWeight: FontWeight.w600),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final labelX = (x - label.width / 2).clamp(0.0, size.width - label.width);
+      final labelY = rate >= 0 ? y - 4 - labelGap - label.height : y + 4 + labelGap;
+      label.paint(canvas, Offset(labelX, labelY));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SavingsRatePainter oldDelegate) => true;
+}
+
+/// Igual que [_RateStatTile] pero para el % de sueldo utilizado
+/// (27/10/2026): no es un delta con signo (siempre es un porcentaje de
+/// 0 hacia arriba, nunca negativo -- ver `_formatPercentPlain`), y el
+/// color marca sobregasto real (más del 100 %: ese mes se gastó más de
+/// lo que entró) en vez de seguir el signo.
+class _UsageStatTile extends StatelessWidget {
+  const _UsageStatTile({
+    required this.label,
+    required this.yearMonth,
+    required this.value,
+  });
+
+  final String label;
+  final String yearMonth;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = value > 100 ? C.spend : C.calm;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: C.surface,
+        borderRadius: BorderRadius.circular(R.container),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: T.eyebrow),
+          const SizedBox(height: 6),
+          Text(_formatPercentPlain(value), style: T.amountLarge.copyWith(color: color)),
+          const SizedBox(height: 2),
+          Text(_formatYearMonth(yearMonth), style: T.meta),
+        ],
+      ),
+    );
+  }
+}
+
+/// Redondea al entero más cercano SIN forzar signo (a diferencia de
+/// `_formatPercentSigned`) -- el % de sueldo utilizado nunca es negativo
+/// de verdad (como mucho supera el 100 % en un mes en pérdidas, nunca
+/// baja de 0: `saved <= net <= income` siempre, ver `month_calculator.dart`),
+/// así que un "+" delante no aportaría nada, sería ruido. `73.2` ->
+/// `"73 %"`, `132.4` -> `"132 %"`.
+String _formatPercentPlain(double pct) => '${pct.round()} %';
+
+/// Línea con puntos del % de sueldo utilizado de cada mes (27/10/2026,
+/// complementario de `_SavingsRatePainter`) -- mismo estilo a mano, pero
+/// SIN divergir desde el cero: aquí el valor siempre es >= 0, así que el
+/// cero va abajo del todo (no en el medio) y se escala por el máximo de
+/// verdad, no por el máximo en valor absoluto. El color marca
+/// sobregasto real (> 100 %) en vez de seguir el signo, que aquí no
+/// existe.
+class _UsageRatePainter extends CustomPainter {
+  _UsageRatePainter(this.rates);
+
+  final List<double> rates;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rates.isEmpty || size.width <= 0 || size.height <= 0) return;
+
+    final maxRate = rates.reduce((a, b) => a > b ? a : b);
+    if (maxRate <= 0) return;
+
+    const labelGap = 4.0;
+    const labelClearance = 24.0;
+    const bottomMargin = 4.0;
+    final zeroY = size.height - bottomMargin;
+    final plotHeight = size.height - labelClearance - bottomMargin;
+
+    final slotWidth = size.width / rates.length;
+    double xAt(int i) => slotWidth * (i + 0.5);
+    double yAt(int i) => zeroY - (rates[i] / maxRate) * plotHeight;
+
+    canvas.drawLine(
+      Offset(0, zeroY),
+      Offset(size.width, zeroY),
+      Paint()
+        ..color = C.line
+        ..strokeWidth = 1,
+    );
+
+    if (rates.length > 1) {
+      final linePath = ui.Path()..moveTo(xAt(0), yAt(0));
+      for (var i = 1; i < rates.length; i++) {
+        linePath.lineTo(xAt(i), yAt(i));
+      }
+      canvas.drawPath(
+        linePath,
+        Paint()
+          ..color = C.inkDim
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+
+    for (var i = 0; i < rates.length; i++) {
+      final rate = rates[i];
+      final x = xAt(i);
+      final y = yAt(i);
+      final color = rate > 100 ? C.spend : C.calm;
+
+      canvas.drawCircle(Offset(x, y), 4, Paint()..color = C.surface);
+      canvas.drawCircle(
+        Offset(x, y),
+        4,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+      canvas.drawCircle(Offset(x, y), 1.8, Paint()..color = color);
+
+      final label = TextPainter(
+        text: TextSpan(
+          text: _formatPercentPlain(rate),
+          style: T.meta.copyWith(color: color, fontWeight: FontWeight.w600),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      final labelX = (x - label.width / 2).clamp(0.0, size.width - label.width);
+      final labelY = y - 4 - labelGap - label.height;
+      label.paint(canvas, Offset(labelX, labelY.clamp(0.0, size.height)));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _UsageRatePainter oldDelegate) => true;
 }

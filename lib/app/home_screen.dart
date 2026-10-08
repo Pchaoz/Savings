@@ -464,7 +464,7 @@ class _BreakdownRow extends StatelessWidget {
 /// ninguna, no habia forma de enterarte de que tenias sobrante
 /// esperando. Ahora, sin huchas, aparece igual pero invitando a crear
 /// una primero en vez de ofrecer el selector.
-class _TreatSweepBanner extends ConsumerWidget {
+class _TreatSweepBanner extends ConsumerStatefulWidget {
   const _TreatSweepBanner({
     required this.amountCents,
     required this.previousYearMonth,
@@ -474,6 +474,32 @@ class _TreatSweepBanner extends ConsumerWidget {
   final int amountCents;
   final String previousYearMonth;
   final bool hasPockets;
+
+  @override
+  ConsumerState<_TreatSweepBanner> createState() => _TreatSweepBannerState();
+}
+
+/// **Bug corregido el 08/10/2026**: los tres botones de abajo no se
+/// desactivaban mientras se procesaba la pulsacion, asi que un doble
+/// toque (facil de hacer si el dialogo de confirmacion tarda un
+/// instante en aparecer) disparaba la accion DOS veces -- por ejemplo,
+/// "Guardar en ahorro general" dos veces crea dos movimientos
+/// "Trasladado al ahorro general" y resta el doble de la bolsa de
+/// caprichos. `_busy` bloquea los tres botones en cuanto se pulsa
+/// cualquiera de ellos, hasta que esa accion termina de verdad
+/// (incluido el dialogo de "Entendido").
+class _TreatSweepBannerState extends ConsumerState<_TreatSweepBanner> {
+  bool _busy = false;
+
+  Future<void> _guard(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _openPocketPicker(BuildContext context, WidgetRef ref) async {
     final pockets = await ref.read(pocketsProvider.future);
@@ -485,13 +511,13 @@ class _TreatSweepBanner extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(R.container)),
       ),
-      builder: (_) => _PocketPickerSheet(pockets: pockets, amountCents: amountCents),
+      builder: (_) => _PocketPickerSheet(pockets: pockets, amountCents: widget.amountCents),
     );
     if (chosen == null || !context.mounted) return;
 
     await ref.read(repositoryProvider).sweepTreatBagToPocket(
           pocketId: chosen.id,
-          amountCents: amountCents,
+          amountCents: widget.amountCents,
           pocketName: chosen.name,
         );
 
@@ -505,22 +531,60 @@ class _TreatSweepBanner extends ConsumerWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${formatCents(amountCents)} movidos a "${chosen.name}".')),
+        SnackBar(content: Text('${formatCents(widget.amountCents)} movidos a "${chosen.name}".')),
       );
     }
   }
 
-  Future<void> _dismiss(WidgetRef ref) async {
+  Future<void> _showResultDialog(BuildContext context, String message) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveToGeneralSavings(BuildContext context, WidgetRef ref) async {
+    await ref.read(repositoryProvider).sweepTreatBagToSavings(amountCents: widget.amountCents);
+
+    ref.invalidate(monthResultProvider);
+    ref.invalidate(monthMovementsProvider);
+    ref.invalidate(appSettingsProvider);
+    ref.invalidate(pendingTreatSweepProvider);
+
+    if (context.mounted) {
+      await _showResultDialog(
+        context,
+        '${formatCents(widget.amountCents)} guardados en tu ahorro general.',
+      );
+    }
+  }
+
+  Future<void> _accumulate(BuildContext context, WidgetRef ref) async {
     final monthStartDay = ref.read(appSettingsProvider).value?.monthStartDay ?? 1;
     await ref
         .read(repositoryProvider)
         .dismissTreatSweepPrompt(currentYearMonth(monthStartDay: monthStartDay));
     ref.invalidate(appSettingsProvider);
     ref.invalidate(pendingTreatSweepProvider);
+
+    if (context.mounted) {
+      await _showResultDialog(
+        context,
+        '${formatCents(widget.amountCents)} acumulados para el próximo mes de caprichos.',
+      );
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -532,33 +596,40 @@ class _TreatSweepBanner extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            hasPockets
-                ? 'Te sobraron ${formatCents(amountCents)} de caprichos en '
-                    '${_formatYearMonth(previousYearMonth)}. ¿Los movemos a una hucha, '
-                    'o prefieres que se sigan acumulando este mes?'
-                : 'Te sobraron ${formatCents(amountCents)} de caprichos en '
-                    '${_formatYearMonth(previousYearMonth)}, pero todavía no tienes '
-                    'ninguna hucha donde guardarlos. Puedes crear una, o dejar que se '
-                    'sigan acumulando este mes.',
+            'Te sobraron ${formatCents(widget.amountCents)} de caprichos en '
+            '${_formatYearMonth(widget.previousYearMonth)}. ¿Qué quieres hacer con '
+            'ese dinero?',
             style: T.body,
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              TextButton(
-                onPressed: () => _dismiss(ref),
-                child: const Text('Seguir acumulando'),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: hasPockets
-                    ? () => _openPocketPicker(context, ref)
-                    : () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const PocketsScreen()),
-                        ),
-                child: Text(hasPockets ? 'Mover a una hucha' : 'Crear hucha'),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _busy ? null : () => _guard(() => _saveToGeneralSavings(context, ref)),
+              child: const Text('Guardar en ahorro general'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _busy
+                  ? null
+                  : widget.hasPockets
+                      ? () => _guard(() => _openPocketPicker(context, ref))
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const PocketsScreen()),
+                          ),
+              child: Text(widget.hasPockets ? 'Mover a una hucha' : 'Crear hucha'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: _busy ? null : () => _guard(() => _accumulate(context, ref)),
+              child: const Text('Acumular para el próximo mes'),
+            ),
           ),
         ],
       ),

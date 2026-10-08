@@ -1743,11 +1743,35 @@ class $MonthsTable extends Months with TableInfo<$MonthsTable, MonthRow> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _openingBalanceAdjustmentCentsMeta =
+      const VerificationMeta('openingBalanceAdjustmentCents');
+  @override
+  late final GeneratedColumn<int> openingBalanceAdjustmentCents =
+      GeneratedColumn<int>(
+        'opening_balance_adjustment_cents',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _treatSweepResolvedCentsMeta =
+      const VerificationMeta('treatSweepResolvedCents');
+  @override
+  late final GeneratedColumn<int> treatSweepResolvedCents =
+      GeneratedColumn<int>(
+        'treat_sweep_resolved_cents',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     yearMonth,
     treatRate,
     openingBalanceCents,
+    openingBalanceAdjustmentCents,
+    treatSweepResolvedCents,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1784,6 +1808,24 @@ class $MonthsTable extends Months with TableInfo<$MonthsTable, MonthRow> {
         ),
       );
     }
+    if (data.containsKey('opening_balance_adjustment_cents')) {
+      context.handle(
+        _openingBalanceAdjustmentCentsMeta,
+        openingBalanceAdjustmentCents.isAcceptableOrUnknown(
+          data['opening_balance_adjustment_cents']!,
+          _openingBalanceAdjustmentCentsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('treat_sweep_resolved_cents')) {
+      context.handle(
+        _treatSweepResolvedCentsMeta,
+        treatSweepResolvedCents.isAcceptableOrUnknown(
+          data['treat_sweep_resolved_cents']!,
+          _treatSweepResolvedCentsMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1805,6 +1847,14 @@ class $MonthsTable extends Months with TableInfo<$MonthsTable, MonthRow> {
         DriftSqlType.int,
         data['${effectivePrefix}opening_balance_cents'],
       ),
+      openingBalanceAdjustmentCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}opening_balance_adjustment_cents'],
+      ),
+      treatSweepResolvedCents: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}treat_sweep_resolved_cents'],
+      ),
     );
   }
 
@@ -1824,10 +1874,36 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
   /// La semilla. **Solo el primer mes lo tiene**: 556082 (5.560,82 €).
   /// El resto de meses lo heredan calculado en cascada.
   final int? openingBalanceCents;
+
+  /// Ajuste manual que se SUMA al saldo heredado del mes anterior (no lo
+  /// sustituye, a diferencia de [openingBalanceCents]) -- pensado para
+  /// "guardar el sobrante de caprichos en el ahorro general" (08/10/2026):
+  /// a diferencia de sobrescribir el saldo inicial, sumar aqui mantiene la
+  /// regla de oro de la app (todo se recalcula siempre) intacta -- si mas
+  /// adelante se corrige un movimiento de un mes anterior, el cambio se
+  /// sigue propagando bien, porque esto no fija un numero final, solo
+  /// anade algo encima de lo que sea que resulte ese mes.
+  final int? openingBalanceAdjustmentCents;
+
+  /// Cuanto del sobrante de caprichos QUE ENTRO en este mes ya se ha
+  /// movido de verdad (ahorro general o hucha) -- bug encontrado el
+  /// 08/10/2026: sin esto, "Volver a preguntar por el sobrante" (Ajustes)
+  /// volvia a ofrecer la MISMA cantidad de siempre (el `bagOpeningCents`
+  /// de este mes nunca cambia, viene fijo del cierre del mes anterior),
+  /// asi que elegir una opcion otra vez volvia a mover el dinero por
+  /// segunda vez de verdad -- no era un duplicado por error, era la app
+  /// ofreciendo dos veces algo que ya estaba resuelto. `sweepTreatBagTo*`
+  /// suma aqui lo que de verdad mueve; lo que queda por resolver es
+  /// `min(bagOpeningCents, bagClosingCents) - treatSweepResolvedCents`.
+  /// "Acumular" NO suma aqui a proposito: no mueve nada, asi que no hay
+  /// riesgo de duplicar si se vuelve a preguntar despues de acumular.
+  final int? treatSweepResolvedCents;
   const MonthRow({
     required this.yearMonth,
     this.treatRate,
     this.openingBalanceCents,
+    this.openingBalanceAdjustmentCents,
+    this.treatSweepResolvedCents,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1838,6 +1914,16 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
     }
     if (!nullToAbsent || openingBalanceCents != null) {
       map['opening_balance_cents'] = Variable<int>(openingBalanceCents);
+    }
+    if (!nullToAbsent || openingBalanceAdjustmentCents != null) {
+      map['opening_balance_adjustment_cents'] = Variable<int>(
+        openingBalanceAdjustmentCents,
+      );
+    }
+    if (!nullToAbsent || treatSweepResolvedCents != null) {
+      map['treat_sweep_resolved_cents'] = Variable<int>(
+        treatSweepResolvedCents,
+      );
     }
     return map;
   }
@@ -1851,6 +1937,13 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
       openingBalanceCents: openingBalanceCents == null && nullToAbsent
           ? const Value.absent()
           : Value(openingBalanceCents),
+      openingBalanceAdjustmentCents:
+          openingBalanceAdjustmentCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(openingBalanceAdjustmentCents),
+      treatSweepResolvedCents: treatSweepResolvedCents == null && nullToAbsent
+          ? const Value.absent()
+          : Value(treatSweepResolvedCents),
     );
   }
 
@@ -1865,6 +1958,12 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
       openingBalanceCents: serializer.fromJson<int?>(
         json['openingBalanceCents'],
       ),
+      openingBalanceAdjustmentCents: serializer.fromJson<int?>(
+        json['openingBalanceAdjustmentCents'],
+      ),
+      treatSweepResolvedCents: serializer.fromJson<int?>(
+        json['treatSweepResolvedCents'],
+      ),
     );
   }
   @override
@@ -1874,6 +1973,12 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
       'yearMonth': serializer.toJson<String>(yearMonth),
       'treatRate': serializer.toJson<double?>(treatRate),
       'openingBalanceCents': serializer.toJson<int?>(openingBalanceCents),
+      'openingBalanceAdjustmentCents': serializer.toJson<int?>(
+        openingBalanceAdjustmentCents,
+      ),
+      'treatSweepResolvedCents': serializer.toJson<int?>(
+        treatSweepResolvedCents,
+      ),
     };
   }
 
@@ -1881,12 +1986,20 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
     String? yearMonth,
     Value<double?> treatRate = const Value.absent(),
     Value<int?> openingBalanceCents = const Value.absent(),
+    Value<int?> openingBalanceAdjustmentCents = const Value.absent(),
+    Value<int?> treatSweepResolvedCents = const Value.absent(),
   }) => MonthRow(
     yearMonth: yearMonth ?? this.yearMonth,
     treatRate: treatRate.present ? treatRate.value : this.treatRate,
     openingBalanceCents: openingBalanceCents.present
         ? openingBalanceCents.value
         : this.openingBalanceCents,
+    openingBalanceAdjustmentCents: openingBalanceAdjustmentCents.present
+        ? openingBalanceAdjustmentCents.value
+        : this.openingBalanceAdjustmentCents,
+    treatSweepResolvedCents: treatSweepResolvedCents.present
+        ? treatSweepResolvedCents.value
+        : this.treatSweepResolvedCents,
   );
   MonthRow copyWithCompanion(MonthsCompanion data) {
     return MonthRow(
@@ -1895,6 +2008,12 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
       openingBalanceCents: data.openingBalanceCents.present
           ? data.openingBalanceCents.value
           : this.openingBalanceCents,
+      openingBalanceAdjustmentCents: data.openingBalanceAdjustmentCents.present
+          ? data.openingBalanceAdjustmentCents.value
+          : this.openingBalanceAdjustmentCents,
+      treatSweepResolvedCents: data.treatSweepResolvedCents.present
+          ? data.treatSweepResolvedCents.value
+          : this.treatSweepResolvedCents,
     );
   }
 
@@ -1903,43 +2022,64 @@ class MonthRow extends DataClass implements Insertable<MonthRow> {
     return (StringBuffer('MonthRow(')
           ..write('yearMonth: $yearMonth, ')
           ..write('treatRate: $treatRate, ')
-          ..write('openingBalanceCents: $openingBalanceCents')
+          ..write('openingBalanceCents: $openingBalanceCents, ')
+          ..write(
+            'openingBalanceAdjustmentCents: $openingBalanceAdjustmentCents, ',
+          )
+          ..write('treatSweepResolvedCents: $treatSweepResolvedCents')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(yearMonth, treatRate, openingBalanceCents);
+  int get hashCode => Object.hash(
+    yearMonth,
+    treatRate,
+    openingBalanceCents,
+    openingBalanceAdjustmentCents,
+    treatSweepResolvedCents,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is MonthRow &&
           other.yearMonth == this.yearMonth &&
           other.treatRate == this.treatRate &&
-          other.openingBalanceCents == this.openingBalanceCents);
+          other.openingBalanceCents == this.openingBalanceCents &&
+          other.openingBalanceAdjustmentCents ==
+              this.openingBalanceAdjustmentCents &&
+          other.treatSweepResolvedCents == this.treatSweepResolvedCents);
 }
 
 class MonthsCompanion extends UpdateCompanion<MonthRow> {
   final Value<String> yearMonth;
   final Value<double?> treatRate;
   final Value<int?> openingBalanceCents;
+  final Value<int?> openingBalanceAdjustmentCents;
+  final Value<int?> treatSweepResolvedCents;
   final Value<int> rowid;
   const MonthsCompanion({
     this.yearMonth = const Value.absent(),
     this.treatRate = const Value.absent(),
     this.openingBalanceCents = const Value.absent(),
+    this.openingBalanceAdjustmentCents = const Value.absent(),
+    this.treatSweepResolvedCents = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   MonthsCompanion.insert({
     required String yearMonth,
     this.treatRate = const Value.absent(),
     this.openingBalanceCents = const Value.absent(),
+    this.openingBalanceAdjustmentCents = const Value.absent(),
+    this.treatSweepResolvedCents = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : yearMonth = Value(yearMonth);
   static Insertable<MonthRow> custom({
     Expression<String>? yearMonth,
     Expression<double>? treatRate,
     Expression<int>? openingBalanceCents,
+    Expression<int>? openingBalanceAdjustmentCents,
+    Expression<int>? treatSweepResolvedCents,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1947,6 +2087,10 @@ class MonthsCompanion extends UpdateCompanion<MonthRow> {
       if (treatRate != null) 'treat_rate': treatRate,
       if (openingBalanceCents != null)
         'opening_balance_cents': openingBalanceCents,
+      if (openingBalanceAdjustmentCents != null)
+        'opening_balance_adjustment_cents': openingBalanceAdjustmentCents,
+      if (treatSweepResolvedCents != null)
+        'treat_sweep_resolved_cents': treatSweepResolvedCents,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1955,12 +2099,18 @@ class MonthsCompanion extends UpdateCompanion<MonthRow> {
     Value<String>? yearMonth,
     Value<double?>? treatRate,
     Value<int?>? openingBalanceCents,
+    Value<int?>? openingBalanceAdjustmentCents,
+    Value<int?>? treatSweepResolvedCents,
     Value<int>? rowid,
   }) {
     return MonthsCompanion(
       yearMonth: yearMonth ?? this.yearMonth,
       treatRate: treatRate ?? this.treatRate,
       openingBalanceCents: openingBalanceCents ?? this.openingBalanceCents,
+      openingBalanceAdjustmentCents:
+          openingBalanceAdjustmentCents ?? this.openingBalanceAdjustmentCents,
+      treatSweepResolvedCents:
+          treatSweepResolvedCents ?? this.treatSweepResolvedCents,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1977,6 +2127,16 @@ class MonthsCompanion extends UpdateCompanion<MonthRow> {
     if (openingBalanceCents.present) {
       map['opening_balance_cents'] = Variable<int>(openingBalanceCents.value);
     }
+    if (openingBalanceAdjustmentCents.present) {
+      map['opening_balance_adjustment_cents'] = Variable<int>(
+        openingBalanceAdjustmentCents.value,
+      );
+    }
+    if (treatSweepResolvedCents.present) {
+      map['treat_sweep_resolved_cents'] = Variable<int>(
+        treatSweepResolvedCents.value,
+      );
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1989,6 +2149,10 @@ class MonthsCompanion extends UpdateCompanion<MonthRow> {
           ..write('yearMonth: $yearMonth, ')
           ..write('treatRate: $treatRate, ')
           ..write('openingBalanceCents: $openingBalanceCents, ')
+          ..write(
+            'openingBalanceAdjustmentCents: $openingBalanceAdjustmentCents, ',
+          )
+          ..write('treatSweepResolvedCents: $treatSweepResolvedCents, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -5939,6 +6103,8 @@ typedef $$MonthsTableCreateCompanionBuilder =
       required String yearMonth,
       Value<double?> treatRate,
       Value<int?> openingBalanceCents,
+      Value<int?> openingBalanceAdjustmentCents,
+      Value<int?> treatSweepResolvedCents,
       Value<int> rowid,
     });
 typedef $$MonthsTableUpdateCompanionBuilder =
@@ -5946,6 +6112,8 @@ typedef $$MonthsTableUpdateCompanionBuilder =
       Value<String> yearMonth,
       Value<double?> treatRate,
       Value<int?> openingBalanceCents,
+      Value<int?> openingBalanceAdjustmentCents,
+      Value<int?> treatSweepResolvedCents,
       Value<int> rowid,
     });
 
@@ -5970,6 +6138,16 @@ class $$MonthsTableFilterComposer
 
   ColumnFilters<int> get openingBalanceCents => $composableBuilder(
     column: $table.openingBalanceCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get openingBalanceAdjustmentCents => $composableBuilder(
+    column: $table.openingBalanceAdjustmentCents,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get treatSweepResolvedCents => $composableBuilder(
+    column: $table.treatSweepResolvedCents,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -5997,6 +6175,16 @@ class $$MonthsTableOrderingComposer
     column: $table.openingBalanceCents,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get openingBalanceAdjustmentCents => $composableBuilder(
+    column: $table.openingBalanceAdjustmentCents,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get treatSweepResolvedCents => $composableBuilder(
+    column: $table.treatSweepResolvedCents,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$MonthsTableAnnotationComposer
@@ -6016,6 +6204,16 @@ class $$MonthsTableAnnotationComposer
 
   GeneratedColumn<int> get openingBalanceCents => $composableBuilder(
     column: $table.openingBalanceCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get openingBalanceAdjustmentCents => $composableBuilder(
+    column: $table.openingBalanceAdjustmentCents,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get treatSweepResolvedCents => $composableBuilder(
+    column: $table.treatSweepResolvedCents,
     builder: (column) => column,
   );
 }
@@ -6051,11 +6249,16 @@ class $$MonthsTableTableManager
                 Value<String> yearMonth = const Value.absent(),
                 Value<double?> treatRate = const Value.absent(),
                 Value<int?> openingBalanceCents = const Value.absent(),
+                Value<int?> openingBalanceAdjustmentCents =
+                    const Value.absent(),
+                Value<int?> treatSweepResolvedCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MonthsCompanion(
                 yearMonth: yearMonth,
                 treatRate: treatRate,
                 openingBalanceCents: openingBalanceCents,
+                openingBalanceAdjustmentCents: openingBalanceAdjustmentCents,
+                treatSweepResolvedCents: treatSweepResolvedCents,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -6063,11 +6266,16 @@ class $$MonthsTableTableManager
                 required String yearMonth,
                 Value<double?> treatRate = const Value.absent(),
                 Value<int?> openingBalanceCents = const Value.absent(),
+                Value<int?> openingBalanceAdjustmentCents =
+                    const Value.absent(),
+                Value<int?> treatSweepResolvedCents = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MonthsCompanion.insert(
                 yearMonth: yearMonth,
                 treatRate: treatRate,
                 openingBalanceCents: openingBalanceCents,
+                openingBalanceAdjustmentCents: openingBalanceAdjustmentCents,
+                treatSweepResolvedCents: treatSweepResolvedCents,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -29,6 +29,24 @@ tres números más el número de build (p. ej. "1.6.0+7").
   tarjetas nuevas para ver de un vistazo cuál fue tu mejor y tu peor
   mes.
 
+## [1.9] - 2026-10-08
+
+### Añadido
+- En Evolución del ahorro, debajo del gráfico de cambio mes a mes,
+  ahora hay otro con el % de ahorro de cada mes (lo ganado entre lo
+  que entró ese mes), con dos tarjetas para ver de un vistazo tu mes
+  de más y de menos ahorro.
+- El aviso de sobrante de caprichos al cambiar de mes pasa de dos a
+  tres opciones: guardarlo en el ahorro general (nueva), moverlo a una
+  hucha, o acumularlo con los caprichos del mes que viene -- las tres
+  muestran ahora un mensaje confirmando cuánto se movió y a dónde.
+- En Evolución del ahorro también se puede ver, en vez del % de
+  ahorro, el % de sueldo utilizado cada mes (el complementario:
+  cuánto de lo que entró se acabó gastando) -- nuevo interruptor en
+  Ajustes > Personalización ("Evolución: % de sueldo utilizado") que
+  decide cuál de los dos se muestra, ya que son complementarios y no
+  tiene sentido ver los dos a la vez.
+
 ## [1.7.2] - 2026-09-21
 
 ### Añadido

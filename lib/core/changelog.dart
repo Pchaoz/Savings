@@ -35,6 +35,27 @@ class ChangelogEntry {
 
 const appChangelog = <ChangelogEntry>[
   ChangelogEntry(
+    version: '1.9',
+    date: '08/10/2026',
+    changes: [
+      'En Evolucion del ahorro, debajo del grafico de cambio mes a mes, '
+          'ahora hay otro con el % de ahorro de cada mes (lo ganado entre '
+          'lo que entro ese mes), con dos tarjetas para ver de un vistazo '
+          'tu mes de mas y de menos ahorro.',
+      'El aviso de sobrante de caprichos al cambiar de mes pasa de dos a '
+          'tres opciones: guardarlo en el ahorro general (nueva), '
+          'moverlo a una hucha, o acumularlo con los caprichos del mes '
+          'que viene -- las tres muestran ahora un mensaje confirmando '
+          'cuanto se movio y a donde.',
+      'En Evolucion del ahorro tambien se puede ver, en vez del % de '
+          'ahorro, el % de sueldo utilizado cada mes (el complementario: '
+          'cuanto de lo que entro se acabo gastando) -- nuevo interruptor '
+          'en Ajustes > Personalizacion que decide cual de los dos se '
+          'muestra, ya que son complementarios y no tiene sentido ver '
+          'los dos a la vez.',
+    ],
+  ),
+  ChangelogEntry(
     version: '1.8',
     date: '24/09/2026',
     changes: [

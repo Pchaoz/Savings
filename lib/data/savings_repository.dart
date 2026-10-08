@@ -391,6 +391,10 @@ class SavingsRepository {
       if (config?.openingBalanceCents != null) {
         balance = config!.openingBalanceCents!;
       }
+      // Ajuste manual que se SUMA (no sustituye) al saldo heredado --
+      // "guardar el sobrante de caprichos en el ahorro general" (ver
+      // Months.openingBalanceAdjustmentCents, v11, 08/10/2026).
+      balance += config?.openingBalanceAdjustmentCents ?? 0;
       final rate = config?.treatRate ?? defaultRate;
 
       result = calculateMonth(
@@ -1277,6 +1281,17 @@ class SavingsRepository {
     );
   }
 
+  /// En "Evolución del ahorro", si se muestra el % de sueldo utilizado
+  /// cada mes (true) en vez del % de ahorro (false, por defecto) --
+  /// pedido por Pol el 27/10/2026, son complementarios el uno del otro
+  /// así que solo tiene sentido ver uno de los dos a la vez.
+  Future<void> setShowUsageRateInsteadOfSavings(bool value) async {
+    await getAppSettings();
+    await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
+      AppSettingsCompanion(showUsageRateInsteadOfSavings: Value(value)),
+    );
+  }
+
   /// Tutorial guiado de Inicio (bolsa de caprichos + como apuntar un
   /// gasto). `true` tanto al terminarlo como al saltarlo; "Ajustes >
   /// Repetir tutorial" lo vuelve a poner en `false`.
@@ -1390,10 +1405,103 @@ class SavingsRepository {
           );
 
       final monthStartDay = (await getAppSettings()).monthStartDay ?? 1;
+      final thisMonth = yearMonthOf(now, monthStartDay);
+      await _addTreatSweepResolved(yearMonth: thisMonth, cents: amountCents);
       await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
-        AppSettingsCompanion(dismissedTreatSweepYearMonth: Value(yearMonthOf(now, monthStartDay))),
+        AppSettingsCompanion(dismissedTreatSweepYearMonth: Value(thisMonth)),
       );
     });
+  }
+
+  /// Suma [cents] al ajuste manual de saldo inicial de [yearMonth]
+  /// (`Months.openingBalanceAdjustmentCents`, v11) -- nunca lo sustituye,
+  /// para no perder un ajuste anterior si alguna vez se usa mas de una
+  /// vez sobre el mismo mes. `insertOnConflictUpdate` porque `yearMonth`
+  /// es la clave primaria de `Months`: crea la fila si no existia, o
+  /// solo actualiza esta columna si ya existia (p. ej. con un
+  /// `treatRate` u `openingBalanceCents` propios ya puestos).
+  Future<void> _addOpeningBalanceAdjustment({
+    required String yearMonth,
+    required int cents,
+  }) async {
+    final existing = await (_db.select(_db.months)
+          ..where((m) => m.yearMonth.equals(yearMonth)))
+        .getSingleOrNull();
+    final newValue = (existing?.openingBalanceAdjustmentCents ?? 0) + cents;
+    await _db.into(_db.months).insertOnConflictUpdate(
+          MonthsCompanion.insert(
+            yearMonth: yearMonth,
+            openingBalanceAdjustmentCents: Value(newValue),
+          ),
+        );
+  }
+
+  /// Guarda [amountCents] de la bolsa de caprichos directamente en el
+  /// ahorro general -- una de las tres opciones del aviso de sobrante
+  /// (08/10/2026), junto a "mover a una hucha" y "seguir acumulando".
+  /// Mismo patron que [sweepTreatBagToPocket]: un movimiento de capricho
+  /// normal para que salga de la bolsa (el motor no necesita saber que
+  /// en realidad fue a ahorro), pero en vez de un ingreso en una hucha,
+  /// el importe se suma como ajuste al saldo inicial de ESTE mismo mes
+  /// (`_addOpeningBalanceAdjustment`) -- asi "Ahorro total" lo refleja
+  /// ya mismo, sin pasar otra vez por la formula de caprichos ni
+  /// aplicarsele el margen una segunda vez. Las escrituras van en una
+  /// transaccion para que nunca quede a medias.
+  Future<void> sweepTreatBagToSavings({required int amountCents}) async {
+    await _db.transaction(() async {
+      final category = await treatCategory();
+      final now = DateTime.now();
+      final monthStartDay = (await getAppSettings()).monthStartDay ?? 1;
+      final thisMonth = yearMonthOf(now, monthStartDay);
+
+      await _db.into(_db.transactions).insert(
+            TransactionsCompanion.insert(
+              date: now,
+              amountCents: amountCents,
+              categoryId: category.id,
+              note: const Value('Trasladado al ahorro general'),
+            ),
+          );
+
+      await _addOpeningBalanceAdjustment(yearMonth: thisMonth, cents: amountCents);
+      await _addTreatSweepResolved(yearMonth: thisMonth, cents: amountCents);
+
+      await (_db.update(_db.appSettings)..where((s) => s.id.equals(0))).write(
+        AppSettingsCompanion(dismissedTreatSweepYearMonth: Value(thisMonth)),
+      );
+    });
+  }
+
+  /// Suma [cents] a `Months.treatSweepResolvedCents` de [yearMonth] (v12,
+  /// ver comentario de la columna en `tables.dart`) -- SUMA, igual que
+  /// [_addOpeningBalanceAdjustment], para no perder lo ya resuelto si
+  /// esto se llama mas de una vez sobre el mismo mes (p. ej. guardar una
+  /// parte en ahorro general y otra parte, otro dia, en una hucha).
+  Future<void> _addTreatSweepResolved({
+    required String yearMonth,
+    required int cents,
+  }) async {
+    final existing = await (_db.select(_db.months)
+          ..where((m) => m.yearMonth.equals(yearMonth)))
+        .getSingleOrNull();
+    final newValue = (existing?.treatSweepResolvedCents ?? 0) + cents;
+    await _db.into(_db.months).insertOnConflictUpdate(
+          MonthsCompanion.insert(
+            yearMonth: yearMonth,
+            treatSweepResolvedCents: Value(newValue),
+          ),
+        );
+  }
+
+  /// Cuanto de `Months.treatSweepResolvedCents` hay ya para [yearMonth]
+  /// (0 si no hay fila o esta a null) -- lo usa
+  /// `treatSweepRemainingCentsProvider` para no volver a ofrecer dinero
+  /// que ya se movio de verdad.
+  Future<int> treatSweepResolvedCentsFor(String yearMonth) async {
+    final row = await (_db.select(_db.months)
+          ..where((m) => m.yearMonth.equals(yearMonth)))
+        .getSingleOrNull();
+    return row?.treatSweepResolvedCents ?? 0;
   }
 
   /// "No, gracias, que se siga acumulando este mes" -- solo marca el
